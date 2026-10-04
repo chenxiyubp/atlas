@@ -1,0 +1,175 @@
+# 分层模型设置（`/model-settings`）
+
+按 provider 默认模型与四个模型档位（default / haiku / sonnet / opus / fable）分别配置**档位模型**、**思考强度**与**上下文窗口**。
+
+> `/models-setting` 现在是 `/model-settings` 的别名。两条命令此前只差一个 `s` 的位置，且写的是同一份 `settings.modelSettings`（前者开向导的模型步骤，那一步本来就同时收模型 id、effort 和最大上下文），在 `/help` 里读起来就是重复项。已合并为一条：**不带参数打开交互式编辑器，带参数走脚本形式**。旧名保留为别名，肌肉记忆和既有脚本不受影响。
+
+在此之前这两轴都是全局单值：一个扁平的 `settings.effortLevel`，和一个 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`。前者说不出「opus 多想一点、haiku 省着点」，后者更是 `utils/session/context.ts` 里明写的「the single knob」。而合理的默认值其实取决于别名背后是哪家 provider——DeepSeek 的三档 effort 梯子和 Anthropic 的五档不是一回事，GPT 的窗口也不是 200k。
+
+## 出厂默认
+
+**升级即生效，不需要任何配置。**
+
+| provider 家族 | effort | 上下文 |
+| --- | --- | --- |
+| DeepSeek | `max` | 1M |
+| GPT（含 `o1`/`o3`/`o4-mini` 这条 reasoning 线） | `xhigh` | 272k |
+| Claude opus / fable | `xhigh` | 1M |
+| Claude sonnet / haiku | `xhigh` | 200k |
+| Gemini（认得出的文本模型） | `high` | 1M |
+| Grok | `high` | 按代，见下表 |
+| 其他（GLM / Qwen / Kimi / 本地 vLLM …） | `xhigh` | 200k |
+
+Claude 的 sonnet 和 haiku **只降窗口、不降 effort**。那条例外针对的是能力（这两档没有 1M 档位），不是偏好（该想多少还想多少）。
+
+Gemini 和 Grok 取 `high`，因为它们是唯二**没有五档词汇**、要靠 occ 映射到别的参数上的家族（分别是思考预算和两档梯子）。`high` 被这两个映射定义为**恒等档**——发出去的东西和 occ 开始介入之前完全一样——所以打开映射不会悄悄把存量会话重新调过一遍。见「effort 怎么落到各家协议上」。
+
+**那条恒等档的论证只管 effort。** 它一度被顺手套到了上下文轴上：这两家的窗口曾经硬编码 200k，而 200k 在这里不是恒等值，是错 5 倍——每个 Gemini / Grok 会话都在真实容量的 15% 处 autocompact。两根轴现在分开决定：
+
+- **Gemini** 自 1.5 起每一个生成式文本模型都是 1,048,576 输入 token（2.0 Flash、2.5 Pro/Flash/Flash-Lite、整条 3.x 线），所以这里用**版本前缀规则**而不是列表——列表会过期（3-pro-preview 和 2.0-flash 上线半年内就退役了），这个数字四代没动过。例外全写在 id 里：embedding 模型 2k–8k、image 模型 64k–128k，靠 id 里的 `embedding` / `image` 排除。取整到 1M 而不是 1,048,576：**少估只是早一点压缩，多估是硬 prompt-too-long**。
+- **Grok** 一款一款列（docs.x.ai）：`grok-build-0.1` / `grok-code-fast*` 256k，`grok-4.5`·`grok-4.6` 500k，`grok-4.20`·`grok-4.3` 1M，已退役并重定向到 grok-4.3 的 `grok-4-fast*` / `grok-4.1-fast*` 跟着算 1M，`grok-4` / `grok-4-0709` 256k。**没有家族兜底规则**：xAI 的窗口在活跃模型之间真的差 4 倍，猜一个数在多数模型上都是错的，所以表里没有的 `grok-*` 保持 200k 兜底。`grok-3` 系故意留空——它的文档页已下线、数字无法从一手来源确认，而且请求已被重定向到 grok-4.3，真实行为不由这张表决定。**这里的取舍方向不是口味问题：多估的后果是硬失败（上游直接拒收），少估的后果是早压缩（浪费但可用）**，两者不对称，所以一手来源确认不了的一律往「还能用」那边落。
+- xAI 只公布一个「context window」数字，没说是纯输入还是输入+输出。occ 按**纯输入预算**用它，这是保守读法，而且 occ 还会在此之上再扣掉预留的输出 token。
+
+两道硬约束由调用方施加，不在默认表里：
+
+- effort **只在 `modelSupportsEffort(model)` 为真时才发**。探测不到支持就不发这个字段，避免第三方端点直接 400。
+- 1M 对 **Anthropic 系**要求模型 id 带 `[1m]` 后缀。后缀是 beta 头 `context-1m-2025-08-07` 的唯一来源；只把本地记账改成 1M 而不发头，结果是 API 在 200k 就拒，而 auto-compact 以为还有 800k 余量从不触发——一次本该压缩的对话直接变成 prompt too long。`apply1mContextOptIn` 会在「配置要 1M 且模型支持」时补上后缀。
+
+  **这道闸门是关于 Anthropic 模型的事实，不是关于数字的**，所以对别家不成立：第三方 id 没有 beta 头可漏，而指着那个端点的用户比一张从没听说过该 checkpoint 的能力表更清楚它的窗口。此前对所有模型一律 clamp，等于让「给这个档位设最大上下文」在**每一家 1M 模型不叫 Claude 的 provider 上都静默失效**。判定见 `supportsContextWindow()`，`/model` 的窗口梯子也用它筛选可选项。
+
+## 配置的窗口大于端点真的给的窗口时
+
+**Anthropic 只提供两个窗口：200k，和带 `context-1m` beta 头的 1M。中间什么都没有。** 而 `contextTokens` 接受任意数字，闸门此前只设在 1M 那一处，于是 200k–1M 之间整段是**无人管的越权带**：`claude-opus-5` 配 372k → 本地按 372k 记账 → 因为 `< 1M` 不加 `[1m]` → 不发 beta 头 → 服务端仍是 200k。结果是 auto-compact 瞄着 ~352k，而 API 在 200k 就 `prompt is too long`——本该压缩的地方变成硬失败。
+
+现在由 `clampConfiguredContextWindow()`（`src/utils/session/context.ts`）统一收口，规则三条：
+
+1. **配得比端点小是预算，不是越权**，原样保留（1M 模型上配 128k 就是早点压缩）。
+2. **Anthropic 系 id 配到不可能被服务的值就下调**到实际能拿到的那一档。要 ≥1M 且模型支持 1M 时不下调——因为那恰好就是 `[1m]` 的开关，`apply1mContextOptIn` 会把后缀补上，头会跟着请求发出去。
+3. **第三方 id 一律不 clamp**。理由同上：没有 beta 头可漏，也没有能力表知道那个 checkpoint。这里的纠正手段依然是 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`。
+
+`supportsContextWindow(model, n)` 现在的定义就是「clamp 会不会改动 n」，所以 `/model` 梯子提供的档位和记账用的数字**不可能对不上**：裸 `claude-opus-5` 上 272k / 512k 不再出现在梯子里，1M 仍在（选它会产生 `[1m]`）；`claude-opus-5[1m]` 上全部档位都在。
+
+**下调不是静默的**，两个地方都会说：
+
+- **启动时一条一次性提示**（`src/utils/terminal/contextWindowNotice.ts`，走 StatusNotices）说明被下调到了多少、以及两条出路。只有**用户自己配的**两个来源（`settings.modelSettings` / 会话内改动）会触发；出厂默认那次下调（opus/fable 默认 1M 但没 `[1m]`）是 occ 自己的选择，不提示。
+- **`/model-settings` 面板**在配置值后面缀 `· capped to 200k by model`（文案对齐上游）。配置值仍是可编辑的主体——把它换成生效值等于把用户要改的那个数藏起来。这里**不区分来源**，出厂默认那行也标：启动提示压制默认是因为会天天响，而面板是用户主动打开的，「Opus 显示 1M 而会话跑 200k」恰恰是这里最该回答的疑惑。
+
+**`/model` 的 Space 循环也跟着走。** 已存一个不可服务的值（比如裸 Claude id 上的 372k）时，第一跳落到**不大于它的最大可服务档**（→ 200k），而不是梯子最底（128k）：纠正一个不可用的窗口不该顺手再砍掉三分之一可用的窗口。
+
+**`CLAUDE_CODE_MAX_CONTEXT_TOKENS` 不参与 clamp。** 上游把它的对应物门控在 `DISABLE_COMPACT` 已设或模型名不以 `claude-` 开头之后；occ 有意分叉——这里它被定义为对所有用户生效的最高优先级纠正手段，第三方端点用户靠它救命，加门控会静默打断存量配置。
+
+**认不出的模型会说出来。** 所有探测都不命中、且 id 不属于任何 occ 有表的家族时，那个 200k 是猜的而不是事实，启动时提示一次并指向 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`。用户已经回答过这个问题（env 或分层配置）就不提示；`CLAUDE_CODE_DISABLE_UNKNOWN_MODEL_NOTICE=1` 关掉。
+
+## 优先级
+
+```
+环境变量  >  分层配置  >  内置默认
+```
+
+env 留在最上面是有意的：`CLAUDE_CODE_MAX_CONTEXT_TOKENS` 被定义为「探测不到真实窗口时的最终纠正手段」，脚本、容器和 CI 靠它给单次运行临时覆盖。把它降级会静默破坏这些场景。
+
+`CLAUDE_CODE_EFFORT_LEVEL` 同理，会话内的 `/effort` 也仍然压过分层配置。
+
+**档位映射本身以用户手配的为准**，对所有 provider 一致：`OPENAI_DEFAULT_<TIER>_MODEL` / `ANTHROPIC_DEFAULT_<TIER>_MODEL` 等显式配置压过任何内置映射，包括 DeepSeek Anthropic 线自带的 `claude-opus*` → v4-pro / `claude-sonnet*`·`claude-haiku*` → v4-flash。
+
+## effort 怎么落到各家协议上
+
+occ 的五档（`low`/`medium`/`high`/`xhigh`/`max`）只有 Anthropic 一家原生认。其余每家都要映射，且**映射表是各自 provider 目录下的唯一权威**：
+
+| provider | 字段 | 映射 |
+| --- | --- | --- |
+| Anthropic（含 Bedrock / Vertex / Foundry） | `output_config.effort` | 原样发；五档就是它的词汇 |
+| DeepSeek（**两条线都是**） | chat 线 `reasoning_effort` / Anthropic 线 `output_config.effort` | 折成三档：low→low，medium·high→high，xhigh·max→max，未设→max |
+| OpenAI responses | `reasoning.effort` | 原样发（该线认 xhigh/max） |
+| OpenAI chat | `reasoning_effort` | xhigh·max 夹到 high；只对 reasoning 模型发 |
+| Gemini | `generationConfig.thinkingConfig.thinkingBudget` | 按倍率缩放：0.25 / 0.5 / **1（恒等）** / 1.5 / 2，下限 128 token |
+| Grok | `reasoning_effort` | 折成两档：low→low，其余→high；**只对 `grok-3-mini` 系发** |
+
+三个容易踩的点：
+
+- **DeepSeek 的 Anthropic 线也要折。** 实测（2026-08-07）该端点对五个值全部返回 200、不报错、也测不出差异 —— 这是坏消息不是好消息：它没定义的档位会静默回落到自己的默认，而状态栏还在显示用户选的那一档。折叠让 `/effort` 在 DeepSeek 两条线上含义一致。
+- **Gemini 没有 effort 词汇**，唯一的旋钮就是思考预算，所以是缩放而不是加字段 —— 请求形状不变，不可能把本来能用的端点打成 400。`high` 是恒等档且是该家族的出厂默认，所以用户没动过 `/effort` 的会话发出去的字节和以前一模一样。
+- **Grok-4 系拒收 `reasoning_effort`**，所以那几个模型 `modelSupportsEffort()` 返回 false、界面上根本不给选。这不是漏做，是那个参数在那个模型上不存在。
+
+`modelSupportsEffort()` 是显示与发送的**同一个**判据。两者分叉过一次（DeepSeek `deepseek-chat` 判为不支持而 chat 线照发 `max`），结果是界面装作没有这个旋钮、请求却一直被它操纵。改任何一边都要同时改另一边。
+
+## 档位从模型 id 反查
+
+分层配置以**档位**为键，而请求里流动的是**解析后的模型 id**。对 Claude 系这不是问题（id 自带 `opus`/`sonnet` 字样），但第三方 id 一个字都不带 —— `deepseek-v4-pro`、`glm-5.2`、`gpt-5.6-sol` 全都查不出档位。此前的后果是：`getModelTier` 返回 `undefined` → `getTierOverride` 返回 `undefined` → **写进 `modelSettings` 的每个值都被静默忽略**，而那恰恰是本特性存在的全部理由。
+
+补上的那一环是用户自己配的档位映射：`OPENAI_DEFAULT_OPUS_MODEL=deepseek-v4-pro` 本来就说明了「opus 别名解析到这个 id」，反着读一遍即可。四个前缀（`ANTHROPIC` / `OPENAI` / `GEMINI` / `GROK`）都扫，大小写与 `[1m]` 后缀都归一化。
+
+**反查可能是多对一**：把四个别名全指向同一个 checkpoint 是常见的 DeepSeek 配置。主循环会保留用户选择的来源，所以 provider 默认请求使用 `default`、显式 `/model sonnet` 使用 `sonnet`，即使两者解析成同一个 id 也能各自生效。只有已经丢失来源的后台/显式 concrete-id 路径才使用兼容回退：「先取已配置的档位，再取能力最高的（fable > opus > sonnet > haiku）」。
+
+### `default` 槽认的是「来源」，不是「解析结果」
+
+判定入口是 `getMainLoopModelSettingsSlot()`，两条规则按序生效：
+
+1. **看选择从哪来。** provider 的单模型键（`ANTHROPIC_MODEL` / `OPENAI_MODEL` / `GEMINI_MODEL` / `GROK_MODEL`）和四个 `*_DEFAULT_<TIER>_MODEL` 都属于**默认链** —— 它们是向导用来描述 provider 的，不是用户在挑模型。把它们当成「用户选了这个 id」正是此前 `default` 槽**永远读不回来**的原因：第三方会话没配 `*_MODEL` 时判定恒为 false，配了又被当成显式选择，两条路都落不到 `default`。显式选择只有三个来源：`/model`、`--model`、`settings.model`。字面别名（`/model opus`）保留别名槽；具体 id 走反查；**显式 id 恰好等于 provider 默认模型时也归 `default`**，否则同一个 id 会分裂成两个槽。
+2. **只有主循环模型能拿到 `default`。** 子 agent 和 small/fast 模型直接拿自己的 id 调 `getContextWindowForModel` / `resolveAppliedEffort`，不加这条就会把主力模型的 effort 和窗口套到一个后台 haiku 上。一方会话内建默认（Opus 或 Sonnet，取决于订阅）无法在此处解析——那条链会在无凭据时抛错，而 `getContextWindowForModel` 就在它下游——所以按**取值范围**判定：内建默认永远不是 Haiku 也不是 Fable，这两档因此保留自己的槽。
+
+这也是 `--model default` 与 `/model default` 现在都存 `null`、agent 声明的 `model:` 现在按**原始别名**存的原因：提前解析成具体 id 就把「来源」丢了，槽随之判错。
+
+### 从 2.34 升上来
+
+2.34 的 `/model` 选择器没有 `default` 槽，Default 行写的是「默认模型反查出的那个 tier」。2.35 改按来源判定后，那些值对默认会话就读不到了。启动时的一次性迁移 `migrateDefaultTierSettingsToDefaultSlot` 会在 `modelSettings.default` **未设**且该 tier 槽有值时把它**复制**（不是移动）到 `default`；tier 槽原样保留，因为显式 `/model opus` 仍然该用它。`default` 已存在就什么都不做。
+
+## 用法
+
+三个入口，写的是同一份 `settings.modelSettings`：
+
+**`/model` 选择器**（推荐）—— 高亮某一行时，`←/→` 调该设置槽的 effort，`Space` 循环该设置槽的最大上下文（默认 → 128k → 200k → 272k → 512k → 1M → 回到默认）。`Default` 行写入独立的 `default` 槽，其余别名写入各自档位；面板也会在 `CLAUDE_CODE_MAX_CONTEXT_TOKENS` / `CLAUDE_CODE_EFFORT_LEVEL` 正在压制它时给出提示。
+
+`Space` 以前是「1M context 开/关」二元开关。它现在是同一件事的完整梯子：`[1m]` 后缀由所选窗口推导（≥1M 且模型支持时才加），不再是一个独立开关。旧的 `modelPicker:toggle1M` 键位 id 仍然可用，绑到同一个动作。
+
+选择器里对**任何**档位做的调整都会保存，不只是最后按 Enter 的那一行 —— 一路翻过去把每档调好再回车确认是这个界面的自然用法，只留最后一行等于把其余的活白干。
+
+**首启向导 / `/login` Step 2** 也写这里：`Max context tokens` 与 `Thinking effort` 两个字段落进 `modelSettings`，而不是从前的 `CLAUDE_CODE_MAX_CONTEXT_TOKENS`（那个键在本层**之上**，写在登录里等于让开场值静默压过用户此后每一次调整；保存时会删掉旧版留下的它）。首次保存会为 provider 默认模型和四个档位分别写入家族默认值。**重跑向导时留空则什么都不动**；把 effort 明确选回 `(model default)` 会删除旧覆盖。
+
+**`/provider-settings use <名>`** 不算第四个入口，但会**整形状覆盖**这里：provider 档案把这五个槽和 env 一起快照，切换时按档案恢复；本次特性之前存的档案没有快照，切换时把五个槽清空回家族默认，而不是留着上一家的值。理由见 [provider-settings.md](./provider-settings.md) §〇ter。
+
+**`/model-settings` 命令**（别名 `/models-setting`）：
+
+```bash
+/model-settings                      # 交互式：档位模型 + effort + 上下文一起改
+/model-settings show                 # 打印 default 与四个档位当前值
+/model-settings default effort high  # 设置 provider 默认模型
+/model-settings opus effort max      # 设一个档位的 effort
+/model-settings haiku context 128k   # 设窗口，接受 200000 / 272k / 1m
+/model-settings opus reset           # 清掉该档位的覆盖，回到默认
+/model-settings help                 # 用法（`--help` / `-h` / `?` 同义）
+```
+
+**不带参数**打开的就是登录流程末尾那一步向导（端点与凭据从 env 读回来，一个字都不用重敲），所以档位模型、effort、最大上下文在同一个界面里改完。
+
+**没有可配置 provider 的会话不会因此变得更弱**：Bedrock / Vertex / Foundry 在各自控制台配模型，纯一方会话也没有 `*_DEFAULT_<TIER>_MODEL` 可指——这些会话不带参数时**退回上面那份文字面板**（等同 `show`），而不是弹一个「这里没什么可配」的死胡同对话框。effort 与上下文本来就是它们能设的，`show` 和各个 `<槽位> …` 形式一样可用。
+
+所有带参数的形式都不渲染 UI，可以直接在脚本里用。
+
+落盘在 `settings.json` 的 `modelSettings`：
+
+```json
+{
+  "modelSettings": {
+    "default": { "effort": "high", "contextTokens": 272000 },
+    "opus": { "effort": "max", "contextTokens": 1000000 },
+    "haiku": { "contextTokens": 128000 }
+  }
+}
+```
+
+两轴可以只设一个，另一个继续走默认。
+
+## 与旧的 `effortLevel` 的关系
+
+`settings.effortLevel` 是本特性之前唯一的 effort 键，它在启动时播种 AppState，而 **AppState 的优先级高于分层配置**。两者并存会产生最糟的结果：用户在 `/model-settings` 里设了值，却发现毫无变化。
+
+所以 `/model-settings <tier> effort <level>` 在写入时会**顺带清掉全局 `effortLevel`**，命令输出里会明确告诉你这一点。这是一次性的单向迁移；此后 effort 就由分层配置和 `/effort`（会话内）共同决定。
+
+`effortLevel` 的枚举对非 ant 用户不含 `max`；**`modelSettings` 的 effort 枚举五档齐全**，因为 DeepSeek 的出厂默认就是 `max`，所有用户都必须能看到、保留和选择它。这是与旧键的有意分歧。
+
+## 实现要点（改代码前先读）
+
+- `modelTier.ts` 与 `tierDefaults.ts` **零依赖**。`getContextWindowForModel` 和 `getDefaultEffortForModel` 都会调用它们，而两者都从 `providers.ts` 可达——带依赖就会闭环。这与 `deepseekHost.ts` 存在的理由完全相同。
+- `getModelTier` 的正则此前在 `packages/@ant/model-provider/src/providers/{openai,gemini,grok}/modelMapping.ts` 里**各存了一份且都是模块私有**，现在收敛到一处。
+- 在 `getContextWindowForModel` 里，**显式覆盖**排在所有探测分支之上，**家族默认**排在最底、替换原来那个扁平的 200k。这个区分是必须的：家族默认对每个模型都返回值，放在上面会把 China preset 窗口、ChatGPT 窗口和 `/v1/models` 能力查询全部短路。

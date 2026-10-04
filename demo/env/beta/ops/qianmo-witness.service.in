@@ -1,0 +1,31 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · H 上的审计见证端点（systemd --user 单元，P11.4）。
+#
+# **这是模板**，由 `witness-endpoint.sh install` 派生。参数（端口、节点公钥清单）在
+# <内测根>/ops/witness.env，两枚 token 在 <内测根>/secrets/ 下，单元里只有路径。
+#
+# 它是 `Type=exec` + `Restart=always`：端点没有内存状态（锚点一条一个文件、`wx` 建），
+# 重起不丢东西；而它不在的那段时间，节点的锚点只会在 stderr 里报一句「写不进去」，
+# 节点本身不受影响（发送方 fail-open）。所以挂了就该被拉回来。
+#
+# 存活判据不是单元状态：
+#   curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:38640/v0/anchor   # 不带 token 要 401
+
+[Unit]
+Description=Qianmo beta audit witness endpoint (loopback, append-only anchors)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+Environment=QIANMO_BETA_ROOT=@BETA_ROOT@
+Environment=PATH=@BUN_DIR@:/usr/local/bin:/usr/bin:/bin
+ExecStart=@REPO_DIR@/demo/env/beta/ops/witness-endpoint.sh run
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

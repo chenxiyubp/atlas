@@ -1,0 +1,106 @@
+/**
+ * Shared constants and path builders for MDM settings modules.
+ *
+ * This module has ZERO heavy imports (only `os`) — safe to use from mdmRawRead.ts.
+ * Both mdmRawRead.ts and mdmSettings.ts import from here to avoid duplication.
+ */
+
+import { homedir, userInfo } from 'os'
+import { join } from 'path'
+
+/**
+ * macOS preference domain for occ's OWN MDM profiles.
+ *
+ * Deliberately not `com.anthropic.claudecode`: a profile deployed for
+ * Anthropic's Claude Code does not govern occ, and occ must not read it. occ
+ * ships from a different publisher, so honouring another product's managed
+ * preferences would be surprising and can reference infrastructure that does
+ * not apply here. Administrators managing occ deploy to this domain instead.
+ *
+ * DELIBERATELY NOT identity-switched (see src/constants/identity.ts). A Qianmo
+ * node reads occ's domain rather than one of its own, on purpose:
+ *
+ *   - MDM policy is read-only administrator config, not per-identity state, so
+ *     reading it does not breach the "each identity keeps its own state" rule
+ *     that governs config dirs, caches and credentials.
+ *   - Switching would point the node at a domain nobody deploys to, silently
+ *     escaping whatever policy an administrator set for occ. A security default
+ *     must fail closed: inheriting the stricter policy beats inheriting none.
+ *   - The "different publisher" argument above does not apply here — a Qianmo
+ *     node is this same codebase in another mode, not a third-party product.
+ *
+ * If node-specific policy is ever needed (e.g. resident nodes warranting
+ * STRICTER rules than interactive occ), add a `byIdentity` variant here rather
+ * than a second hardcoded domain — and make the node's domain fall back to
+ * occ's when unset, so the escape hatch above stays closed.
+ */
+export const MACOS_PREFERENCE_DOMAIN = 'win.open-claude-code.occ'
+
+/**
+ * Windows registry key paths for occ's own MDM policies.
+ *
+ * These keys live under SOFTWARE\Policies which is on the WOW64 shared key
+ * list — both 32-bit and 64-bit processes see the same values without
+ * redirection. Do not move these to SOFTWARE\OpenClaudeCode, as SOFTWARE is
+ * redirected and 32-bit processes would silently read from WOW6432Node.
+ * See: https://learn.microsoft.com/en-us/windows/win32/winprog64/shared-registry-keys
+ */
+export const WINDOWS_REGISTRY_KEY_PATH_HKLM =
+  'HKLM\\SOFTWARE\\Policies\\OpenClaudeCode'
+export const WINDOWS_REGISTRY_KEY_PATH_HKCU =
+  'HKCU\\SOFTWARE\\Policies\\OpenClaudeCode'
+
+/** Windows registry value name containing the JSON settings blob. */
+export const WINDOWS_REGISTRY_VALUE_NAME = 'Settings'
+
+/** Path to macOS plutil binary. */
+export const PLUTIL_PATH = '/usr/bin/plutil'
+
+/** Arguments for plutil to convert plist to JSON on stdout (append plist path). */
+export const PLUTIL_ARGS_PREFIX = ['-convert', 'json', '-o', '-', '--'] as const
+
+/** Subprocess timeout in milliseconds. */
+export const MDM_SUBPROCESS_TIMEOUT_MS = 5000
+
+/**
+ * Build the list of macOS plist paths in priority order (highest first).
+ * Evaluates `process.env.USER_TYPE` at call time so ant-only paths are
+ * included only when appropriate.
+ */
+export function getMacOSPlistPaths(): Array<{ path: string; label: string }> {
+  let username = ''
+  try {
+    username = userInfo().username
+  } catch {
+    // ignore
+  }
+
+  const paths: Array<{ path: string; label: string }> = []
+
+  if (username) {
+    paths.push({
+      path: `/Library/Managed Preferences/${username}/${MACOS_PREFERENCE_DOMAIN}.plist`,
+      label: 'per-user managed preferences',
+    })
+  }
+
+  paths.push({
+    path: `/Library/Managed Preferences/${MACOS_PREFERENCE_DOMAIN}.plist`,
+    label: 'device-level managed preferences',
+  })
+
+  // Allow user-writable preferences for local MDM testing in ant builds only.
+  if (process.env.USER_TYPE === 'ant') {
+    paths.push({
+      path: join(
+        homedir(),
+        'Library',
+        'Preferences',
+        `${MACOS_PREFERENCE_DOMAIN}.plist`,
+      ),
+      label: 'user preferences (ant-only)',
+    })
+  }
+
+  return paths
+}

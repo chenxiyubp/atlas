@@ -1,0 +1,426 @@
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test'
+import type { LogOption } from '../../../types/logs.js'
+import type { LocalJSXCommandCall } from '../../../types/command.js'
+import type { TeleportProgressCallback } from '../../../utils/teleport/teleport.js'
+import { debugMock } from '../../../../tests/mocks/debug.js'
+import { logMock } from '../../../../tests/mocks/log.js'
+import { setupTeleportApiMock } from '../../../../tests/mocks/teleportApi.js'
+import { setupTeleportMock } from '../../../../tests/mocks/teleport.js'
+import { setupAnalyticsMock } from '../../../../tests/mocks/analytics.js'
+import { setupSessionStorageMock } from '../../../../tests/mocks/sessionStorage.js'
+
+// ── Mock module-level side effects BEFORE any imports ──
+mock.module('src/utils/telemetry/log.ts', logMock)
+mock.module('src/utils/telemetry/debug.ts', debugMock)
+mock.module('bun:bundle', () => ({
+  feature: (_name: string) => false,
+}))
+
+// ── Teleport utilities ──
+const validateGitStateMock = mock(() => Promise.resolve())
+const teleportResumeMock = mock(
+  (_id: string, _onProgress?: TeleportProgressCallback) =>
+    Promise.resolve({ log: [], branch: 'main' }),
+)
+
+// teleport.tsx via the shared complete-surface mock (missing exports delegate
+// to the real module) — see tests/mocks/teleport.ts. The autofix-pr suite mocks
+// the same specifier with a conflicting teleportToRemote; the afterAll reset
+// below is what keeps the two independent.
+const teleportModuleMock = setupTeleportMock({
+  validateGitState: validateGitStateMock,
+  teleportResumeCodeSession: teleportResumeMock,
+  processMessagesForTeleportResume: mock(
+    (_msgs: unknown[], _err: unknown) => [],
+  ),
+  checkOutTeleportedSessionBranch: mock(() =>
+    Promise.resolve({ branchName: 'main', branchError: null }),
+  ),
+  validateSessionRepository: mock(() =>
+    Promise.resolve({ status: 'match' as const }),
+  ),
+  teleportToRemoteWithErrorHandling: mock(() => Promise.resolve(null)),
+  teleportFromSessionsAPI: mock(() =>
+    Promise.resolve({ log: [], branch: 'main' }),
+  ),
+  // The real export resolves an object, not an array — the previous stub
+  // (`Promise.resolve([])`) would have made `response.newEvents` undefined for
+  // any consumer that reached it while this surface was installed.
+  pollRemoteSessionEvents: mock(() =>
+    Promise.resolve({ newEvents: [], lastEventId: null }),
+  ),
+  teleportToRemote: mock(() => Promise.resolve(null)),
+  archiveRemoteSession: mock(() => Promise.resolve()),
+})
+afterAll(() => teleportModuleMock.reset())
+
+// ── Sessions API mock ──
+const fetchSessionsMock = mock(() =>
+  Promise.resolve([
+    {
+      id: 'session_01ABC',
+      title: 'Test session',
+      status: 'idle',
+      created_at: '2026-04-29',
+    },
+  ]),
+)
+// teleport/api via the shared complete-surface mock (missing exports delegate
+// to the real module) — see tests/mocks/teleportApi.ts.
+const teleportApiMock = setupTeleportApiMock({
+  fetchCodeSessionsFromSessionsAPI: fetchSessionsMock,
+} as unknown as import('../../../../tests/mocks/teleportApi.js').TeleportApiOverrides)
+
+// ── Session storage ──
+const mockLog: LogOption = {
+  date: '2026-04-29',
+  messages: [],
+  value: 0,
+  created: new Date(),
+  modified: new Date(),
+  firstPrompt: '',
+  messageCount: 0,
+  isSidechain: false,
+}
+const getLastSessionLogMock = mock(() => Promise.resolve(mockLog))
+const sessionStorageMock = setupSessionStorageMock({
+  getLastSessionLog: getLastSessionLogMock,
+})
+afterAll(() => sessionStorageMock.reset())
+
+// ── Analytics ──
+const logEventMock = mock(() => {})
+
+const analyticsMock = setupAnalyticsMock({ logEvent: logEventMock })
+afterAll(() => analyticsMock.reset())
+// ── Import SUT after mocks ──
+let callTeleport: LocalJSXCommandCall
+
+beforeAll(async () => {
+  const sut = await import('../launchTeleport.js')
+  callTeleport = sut.callTeleport
+})
+
+// ── Test helpers ──
+const onDone = mock((_result?: string, _opts?: unknown) => {})
+const resumeMockFn = mock(() => Promise.resolve())
+
+function makeContext(withResume = true) {
+  return {
+    abortController: new AbortController(),
+    resume: withResume ? resumeMockFn : undefined,
+  } as unknown as Parameters<typeof callTeleport>[1]
+}
+
+function getLoggedEvents(): string[] {
+  return (logEventMock.mock.calls as unknown as [string, unknown][]).map(
+    c => c[0],
+  )
+}
+
+beforeEach(() => {
+  validateGitStateMock.mockClear()
+  teleportResumeMock.mockClear()
+  getLastSessionLogMock.mockClear()
+  fetchSessionsMock.mockClear()
+  logEventMock.mockClear()
+  onDone.mockClear()
+  resumeMockFn.mockClear()
+  // Restore default happy-path implementations
+  validateGitStateMock.mockImplementation(() => Promise.resolve())
+  teleportResumeMock.mockImplementation(
+    (_id: string, _onProgress?: TeleportProgressCallback) =>
+      Promise.resolve({ log: [], branch: 'main' }),
+  )
+  getLastSessionLogMock.mockImplementation(() => Promise.resolve(mockLog))
+  fetchSessionsMock.mockImplementation(() =>
+    Promise.resolve([
+      {
+        id: 'session_01ABC',
+        title: 'Test session',
+        status: 'idle',
+        created_at: '2026-04-29',
+      },
+    ]),
+  )
+})
+
+describe('callTeleport', () => {
+  test('empty args: fetches sessions list and shows picker', async () => {
+    await callTeleport(onDone, makeContext(), '  ')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/Available sessions/)
+    expect(validateGitStateMock).not.toHaveBeenCalled()
+    expect(teleportResumeMock).not.toHaveBeenCalled()
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_started')
+    expect(events).toContain('tengu_teleport_source_decision')
+  })
+
+  test('empty args + sessions fetch fails with generic error → fetch_fail event', async () => {
+    fetchSessionsMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('network timeout')),
+    )
+    await callTeleport(onDone, makeContext(), '')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/failed to fetch sessions/)
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_events_fetch_fail')
+  })
+
+  test('empty args + sessions fetch fails with 401/forbidden → fetch_forbidden event', async () => {
+    fetchSessionsMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('403 Forbidden: access denied')),
+    )
+    await callTeleport(onDone, makeContext(), '')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/permission denied/)
+    expect(firstArg).toContain('/status')
+    expect(firstArg).toContain('/login')
+    expect(firstArg).not.toContain('claude auth status')
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_events_fetch_forbidden')
+  })
+
+  test('empty args + sessions fetch fails with 404/not-found → fetch_not_found event', async () => {
+    fetchSessionsMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('404 Not Found')),
+    )
+    await callTeleport(onDone, makeContext(), '')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/404/)
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_events_fetch_not_found')
+  })
+
+  test('empty args + sessions fetch fails with token/unauthorized → bad_token event', async () => {
+    fetchSessionsMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('unauthorized: invalid token')),
+    )
+    await callTeleport(onDone, makeContext(), '')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/authentication error/)
+    expect(firstArg).toContain('/login')
+    expect(firstArg).not.toContain('claude auth login')
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_error_bad_token')
+  })
+
+  test('empty args + empty sessions list → teleport_null event', async () => {
+    fetchSessionsMock.mockImplementationOnce(() => Promise.resolve([]))
+    await callTeleport(onDone, makeContext(), '')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/No active sessions/)
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_null')
+  })
+
+  test('empty args + exactly PICKER_PAGE_CAP sessions → page_cap event', async () => {
+    // 20 sessions triggers the page cap log
+    const sessions = Array.from({ length: 20 }, (_, i) => ({
+      id: `session_${i}`,
+      title: `Session ${i}`,
+      status: 'idle',
+      created_at: '2026-04-29',
+    }))
+    fetchSessionsMock.mockImplementationOnce(() => Promise.resolve(sessions))
+    await callTeleport(onDone, makeContext(), '')
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_page_cap')
+  })
+
+  test('--print flag with no session id → shows picker in print mode', async () => {
+    await callTeleport(onDone, makeContext(), '--print')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/Available sessions/)
+  })
+
+  test('short non-UUID session id is rejected without calling teleport', async () => {
+    await callTeleport(onDone, makeContext(), 'abc')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/Invalid session id/)
+    expect(validateGitStateMock).not.toHaveBeenCalled()
+    expect(teleportResumeMock).not.toHaveBeenCalled()
+  })
+
+  test('valid session id + git unclean → reports error, skips resume', async () => {
+    validateGitStateMock.mockImplementation(() =>
+      Promise.reject(
+        new Error(
+          'Git working directory is not clean. Please commit or stash your changes.',
+        ),
+      ),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/Cannot teleport/)
+    expect(firstArg).toMatch(/not clean/)
+    expect(teleportResumeMock).not.toHaveBeenCalled()
+  })
+
+  test('valid session id + clean git → calls teleportResumeCodeSession + context.resume', async () => {
+    const ctx = makeContext(true)
+    await callTeleport(onDone, ctx, '12345678-abcd-ef01-2345-6789abcdef01')
+    expect(teleportResumeMock).toHaveBeenCalledWith(
+      '12345678-abcd-ef01-2345-6789abcdef01',
+      expect.any(Function),
+    )
+    expect(resumeMockFn).toHaveBeenCalledWith(
+      '12345678-abcd-ef01-2345-6789abcdef01',
+      mockLog,
+      'slash_command_session_id',
+    )
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_resume_session')
+    expect(events).toContain('tengu_teleport_first_message_success')
+  })
+
+  test('progress callback is invoked during teleportResumeCodeSession (line 225)', async () => {
+    teleportResumeMock.mockImplementationOnce(
+      (_id: string, onProgress?: TeleportProgressCallback) => {
+        // 'fetching_session' was not one of the five TeleportProgressStep
+        // values — typing the stub against the real callback surfaced it.
+        onProgress?.('fetching_logs')
+        return Promise.resolve({ log: [], branch: 'main' })
+      },
+    )
+    const ctx = makeContext(true)
+    await callTeleport(onDone, ctx, '12345678-abcd-ef01-2345-6789abcdef01')
+    expect(resumeMockFn).toHaveBeenCalled()
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_resume_session')
+  })
+
+  test('teleportResumeCodeSession throws not-found error → fires session_not_found_ event', async () => {
+    teleportResumeMock.mockImplementation(() =>
+      Promise.reject(new Error('Session not found')),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/Teleport failed/)
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_error_session_not_found_')
+  })
+
+  test('teleportResumeCodeSession throws repo mismatch → fires repo_mismatch event', async () => {
+    teleportResumeMock.mockImplementation(() =>
+      Promise.reject(new Error('repo mismatch: expected acme/foo')),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_error_repo_mismatch_sessions_api')
+  })
+
+  test('git dir error → fires tengu_teleport_error_repo_not_in_git_dir_ event', async () => {
+    teleportResumeMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('not in git directory: /tmp/test')),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const events = getLoggedEvents()
+    expect(events).toContain(
+      'tengu_teleport_error_repo_not_in_git_dir_sessions_api',
+    )
+  })
+
+  test('cancelled error → fires tengu_teleport_cancelled event', async () => {
+    teleportResumeMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('operation was cancelled')),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_cancelled')
+  })
+
+  test('token/unauthorized error → fires bad_token event', async () => {
+    teleportResumeMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('401 unauthorized: bad token')),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_error_bad_token')
+  })
+
+  test('status/4xx error → fires bad_status event', async () => {
+    teleportResumeMock.mockImplementationOnce(() =>
+      Promise.reject(new Error('500 internal server error bad status')),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const events = getLoggedEvents()
+    expect(events).toContain('tengu_teleport_error_bad_status')
+  })
+
+  test('valid session id without context.resume → fallback message', async () => {
+    const ctx = makeContext(false) // no resume callback
+    await callTeleport(onDone, ctx, '12345678-abcd-ef01-2345-6789abcdef01')
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/did not provide a resume callback/)
+  })
+
+  test('valid session id without context.resume + print mode → success message', async () => {
+    const ctx = makeContext(false)
+    await callTeleport(
+      onDone,
+      ctx,
+      '--print 12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(typeof firstArg).toBe('string')
+  })
+
+  test('log not found after resume → fallback message', async () => {
+    getLastSessionLogMock.mockImplementation(() =>
+      Promise.resolve(null as unknown as LogOption),
+    )
+    await callTeleport(
+      onDone,
+      makeContext(),
+      '12345678-abcd-ef01-2345-6789abcdef01',
+    )
+    const firstArg = onDone.mock.calls[0]?.[0] as string | undefined
+    expect(firstArg).toMatch(/local log was not found/)
+  })
+})
+
+// Overrides are installed at load (the module under test is imported below and
+// needs them active), so scope them by resetting at the end instead of moving
+// them into beforeAll. Without this they stay installed for every later file
+// in the shard — mock.module is process-global.
+afterAll(() => {
+  teleportApiMock.reset()
+})

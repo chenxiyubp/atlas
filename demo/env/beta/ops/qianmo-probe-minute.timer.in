@@ -1,0 +1,16 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 探针定时器（minute）：每分钟一次：端点应答 + 注册中心 / 控制台 health。
+# 由 fleet-probe.sh install 装、只 enable 不 start——开始计时是一个有意的动作。
+
+[Unit]
+Description=Qianmo beta fleet probe timer (minute)
+
+[Timer]
+OnCalendar=*-*-* *:*:00
+AccuracySec=1s
+Unit=qianmo-probe@minute.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,20 @@
+{
+  "name": "@qianmo/providers",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Qianmo model-service catalog: profile and model types, presets with official sources, the retirement table, validators, the closed compat key set, secret fingerprints and the sixth-action protocol schema v1.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  }
+}

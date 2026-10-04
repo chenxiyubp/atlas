@@ -1,0 +1,24 @@
+{
+  "name": "@qianmo/handoff",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Qianmo local-to-cloud handoff core: manifest validation, shadow commits that never touch the user's HEAD, index, stash or files, single-file session commits, and the append-only handoff ledger.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@open-claude-code/tool-runtime": "workspace:*",
+    "@qianmo/protocol": "workspace:*"
+  }
+}

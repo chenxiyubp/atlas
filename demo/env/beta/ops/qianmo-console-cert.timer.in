@@ -1,0 +1,16 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 控制台证书续期的定时器。每天一次、随机错开一小时；`Persistent=true` 让
+# 关机错过的那一次在开机后补上。90 天的证书在剩三分之一时续，一天一查绰绰有余。
+
+[Unit]
+Description=Daily check for Qianmo beta console certificate renewal
+
+[Timer]
+OnCalendar=*-*-* 04:17:00
+RandomizedDelaySec=1h
+Persistent=true
+
+[Install]
+WantedBy=timers.target

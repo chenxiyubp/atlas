@@ -1,0 +1,17 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 节点 %i 的审计链镜像拉取（单向、只读、节点 → H）。由同名 .timer 触发。
+#
+# **这是模板**，装好的那两份由 `beta-up.sh --role host` 派生，见 qianmo-tunnel@.service.in 头注。
+#
+# 没有 [Install] 段是有意的：这个 service 不该被 enable，它的唯一触发者是
+# qianmo-mirror@%i.timer。enable 它等于开机跑一次然后再也不跑。
+
+[Unit]
+Description=Qianmo beta audit-trail mirror pull from node %i (one-way, read-only)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@OPS_DIR@/mirror-pull.sh %i

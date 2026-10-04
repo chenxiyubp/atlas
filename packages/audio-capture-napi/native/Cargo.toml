@@ -1,0 +1,21 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[package]
+name = "audio-capture"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "AGPL-3.0-or-later"
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+cpal = "=0.15.3"
+napi = { version = "=2.16.17", default-features = false, features = ["napi4"] }
+napi-derive = "=2.16.13"
+
+[build-dependencies]
+napi-build = "=2.2.3"

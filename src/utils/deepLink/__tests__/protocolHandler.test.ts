@@ -1,0 +1,98 @@
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test'
+import { MACOS_DEEP_LINK_BUNDLE_ID } from 'src/constants/brand.js'
+import { setupParseDeepLinkMock } from '../../../../tests/mocks/parseDeepLink.js'
+import { setupTerminalLauncherMock } from '../../../../tests/mocks/terminalLauncher.js'
+
+const mockParseDeepLink = mock((uri: string) => {
+  if (uri === null || uri === undefined || uri === 'bad-uri') {
+    throw new Error('invalid deep link')
+  }
+  return { query: 'hello', cwd: 'E:/Source_code/Claude-code-bast-test' }
+})
+const mockLaunchInTerminal = mock(async () => true)
+
+// Both go through the shared complete-surface mocks: the spies stay (the tests
+// assert on them), but every other export keeps delegating to the real module.
+// A bare `{ parseDeepLink }` surface used to erase the module's re-exported
+// DEEP_LINK_PROTOCOL, which is what registerProtocol.ts imports.
+const parseDeepLinkMock = setupParseDeepLinkMock({
+  parseDeepLink: mockParseDeepLink,
+})
+const terminalLauncherMock = setupTerminalLauncherMock({
+  launchInTerminal: mockLaunchInTerminal,
+})
+afterAll(() => {
+  parseDeepLinkMock.reset()
+  terminalLauncherMock.reset()
+})
+
+const { handleDeepLinkUri, handleUrlSchemeLaunch } = await import(
+  '../protocolHandler.js'
+)
+
+const originalBundleId = process.env.__CFBundleIdentifier
+const originalUrlEvent = process.env.OCC_URL_EVENT
+
+beforeEach(() => {
+  mockParseDeepLink.mockClear()
+  mockLaunchInTerminal.mockClear()
+  // delete, not `= undefined`: assigning undefined stores the literal string
+  // "undefined", so the handler saw a bundle identifier where the test meant
+  // "no bundle identifier at all".
+  delete process.env.__CFBundleIdentifier
+  delete process.env.OCC_URL_EVENT
+})
+
+afterEach(() => {
+  if (originalBundleId === undefined) delete process.env.__CFBundleIdentifier
+  else process.env.__CFBundleIdentifier = originalBundleId
+  if (originalUrlEvent === undefined) {
+    delete process.env.OCC_URL_EVENT
+  } else {
+    process.env.OCC_URL_EVENT = originalUrlEvent
+  }
+})
+
+describe('handleUrlSchemeLaunch', () => {
+  test('returns null without calling url-handler-napi when bundle id does not match', async () => {
+    process.env.__CFBundleIdentifier = 'other.bundle'
+
+    await expect(handleUrlSchemeLaunch()).resolves.toBeNull()
+    expect(mockParseDeepLink).not.toHaveBeenCalled()
+  })
+
+  test('returns null for a matching bundle id when no URL event arrives', async () => {
+    process.env.__CFBundleIdentifier = MACOS_DEEP_LINK_BUNDLE_ID
+
+    await expect(handleUrlSchemeLaunch()).resolves.toBeNull()
+    expect(mockParseDeepLink).not.toHaveBeenCalled()
+  })
+
+  test('handles a URL event after waiting for url-handler-napi', async () => {
+    process.env.__CFBundleIdentifier = MACOS_DEEP_LINK_BUNDLE_ID
+    process.env.OCC_URL_EVENT = 'occ-cli://prompt?q=hello'
+
+    await expect(handleUrlSchemeLaunch()).resolves.toBe(0)
+    expect(mockParseDeepLink).toHaveBeenCalledWith('occ-cli://prompt?q=hello')
+  })
+})
+
+describe('handleDeepLinkUri', () => {
+  test('returns 1 when parsing fails', async () => {
+    await expect(handleDeepLinkUri('bad-uri')).resolves.toBe(1)
+    expect(mockLaunchInTerminal).not.toHaveBeenCalled()
+  })
+
+  test('returns 0 when parsing succeeds and terminal launch succeeds', async () => {
+    await expect(handleDeepLinkUri('occ-cli://prompt?q=hello')).resolves.toBe(0)
+    expect(mockLaunchInTerminal).toHaveBeenCalled()
+  })
+})

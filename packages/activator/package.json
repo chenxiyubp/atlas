@@ -1,0 +1,26 @@
+{
+  "name": "@qianmo/activator",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Qianmo host-side activator and keepalive: catch a request, wake the target node, forward once it is ready — and hold the sandbox out of the freezer meanwhile, over a capability surface that cannot reach a destructive verb.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qianmo/protocol": "workspace:*",
+    "@qianmo/resident": "workspace:*",
+    "@qianmo/router": "workspace:*",
+    "@qianmo/transport": "workspace:*"
+  }
+}

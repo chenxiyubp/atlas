@@ -1,0 +1,232 @@
+import { describe, expect, test } from 'bun:test'
+import {
+  permissionRuleExtractPrefix,
+  hasWildcards,
+  matchWildcardPattern,
+  normalizeShellWhitespace,
+  parsePermissionRule,
+  suggestionForExactCommand,
+  suggestionForPrefix,
+} from '../shellRuleMatching'
+
+// ─── whitespace folding (opt-in) ────────────────────────────────────────
+
+describe('normalizeShellWhitespace', () => {
+  test('folds runs of spaces and tabs', () => {
+    expect(normalizeShellWhitespace('rm  -rf\t\t/')).toBe('rm -rf /')
+  })
+
+  test('leaves newlines alone — they are significant in heredocs', () => {
+    expect(normalizeShellWhitespace('a\n\nb')).toBe('a\n\nb')
+  })
+})
+
+describe('matchWildcardPattern whitespace folding', () => {
+  test('is off by default so path and sandbox callers are unaffected', () => {
+    expect(matchWildcardPattern('rm  -rf *', 'rm -rf /')).toBe(false)
+    expect(matchWildcardPattern('rm -rf *', 'rm  -rf  /')).toBe(false)
+    // Real callers pass file paths, where a doubled space is part of the name.
+    expect(matchWildcardPattern('/a/b  c/*', '/a/b c/d.ts')).toBe(false)
+  })
+
+  test('folds both sides when enabled', () => {
+    expect(matchWildcardPattern('rm  -rf *', 'rm -rf /', false, true)).toBe(
+      true,
+    )
+    expect(matchWildcardPattern('rm -rf *', 'rm  -rf  /', false, true)).toBe(
+      true,
+    )
+  })
+
+  test('folding does not blur distinct commands', () => {
+    expect(matchWildcardPattern('rm -rf *', 'rmdir /tmp', false, true)).toBe(
+      false,
+    )
+  })
+
+  test('folded and unfolded results are cached separately', () => {
+    expect(matchWildcardPattern('rm  -rf *', 'rm -rf /', false, true)).toBe(
+      true,
+    )
+    expect(matchWildcardPattern('rm  -rf *', 'rm -rf /')).toBe(false)
+    expect(matchWildcardPattern('rm  -rf *', 'rm -rf /', false, true)).toBe(
+      true,
+    )
+  })
+})
+
+// ─── permissionRuleExtractPrefix ────────────────────────────────────────
+
+describe('permissionRuleExtractPrefix', () => {
+  test('extracts prefix from legacy :* syntax', () => {
+    expect(permissionRuleExtractPrefix('npm:*')).toBe('npm')
+  })
+
+  test('extracts multi-word prefix', () => {
+    expect(permissionRuleExtractPrefix('git commit:*')).toBe('git commit')
+  })
+
+  test('returns null for non-prefix rule', () => {
+    expect(permissionRuleExtractPrefix('npm install')).toBeNull()
+  })
+
+  test('returns null for empty string', () => {
+    expect(permissionRuleExtractPrefix('')).toBeNull()
+  })
+
+  test('returns null for wildcard without colon', () => {
+    expect(permissionRuleExtractPrefix('npm *')).toBeNull()
+  })
+})
+
+// ─── hasWildcards ───────────────────────────────────────────────────────
+
+describe('hasWildcards', () => {
+  test('returns true for unescaped wildcard', () => {
+    expect(hasWildcards('git *')).toBe(true)
+  })
+
+  test('returns false for legacy :* syntax', () => {
+    expect(hasWildcards('npm:*')).toBe(false)
+  })
+
+  test('returns false for escaped wildcard', () => {
+    expect(hasWildcards('git \\*')).toBe(false)
+  })
+
+  test('returns true for * with even backslashes', () => {
+    expect(hasWildcards('git \\\\*')).toBe(true)
+  })
+
+  test('returns false for no wildcards', () => {
+    expect(hasWildcards('npm install')).toBe(false)
+  })
+
+  test('returns false for empty string', () => {
+    expect(hasWildcards('')).toBe(false)
+  })
+})
+
+// ─── matchWildcardPattern ───────────────────────────────────────────────
+
+describe('matchWildcardPattern', () => {
+  test('matches simple wildcard', () => {
+    expect(matchWildcardPattern('git *', 'git add')).toBe(true)
+  })
+
+  test('matches bare command when pattern ends with space-wildcard', () => {
+    expect(matchWildcardPattern('git *', 'git')).toBe(true)
+  })
+
+  test('rejects non-matching command', () => {
+    expect(matchWildcardPattern('git *', 'npm install')).toBe(false)
+  })
+
+  test('matches middle wildcard', () => {
+    expect(matchWildcardPattern('git * --verbose', 'git add --verbose')).toBe(
+      true,
+    )
+  })
+
+  test('handles escaped asterisk as literal', () => {
+    expect(matchWildcardPattern('echo \\*', 'echo *')).toBe(true)
+    expect(matchWildcardPattern('echo \\*', 'echo hello')).toBe(false)
+  })
+
+  test('case-insensitive matching', () => {
+    expect(matchWildcardPattern('Git *', 'git add', true)).toBe(true)
+  })
+
+  test('exact match without wildcards', () => {
+    expect(matchWildcardPattern('npm install', 'npm install')).toBe(true)
+    expect(matchWildcardPattern('npm install', 'npm update')).toBe(false)
+  })
+
+  test('handles regex special characters in pattern', () => {
+    expect(matchWildcardPattern('echo (hello)', 'echo (hello)')).toBe(true)
+  })
+})
+
+// ─── parsePermissionRule ────────────────────────────────────────────────
+
+describe('parsePermissionRule', () => {
+  test('parses exact command', () => {
+    const result = parsePermissionRule('npm install')
+    expect(result).toEqual({ type: 'exact', command: 'npm install' })
+  })
+
+  test('parses legacy prefix syntax', () => {
+    const result = parsePermissionRule('npm:*')
+    expect(result).toEqual({ type: 'prefix', prefix: 'npm' })
+  })
+
+  test('parses wildcard pattern', () => {
+    const result = parsePermissionRule('git *')
+    expect(result).toEqual({ type: 'wildcard', pattern: 'git *' })
+  })
+
+  test('escaped wildcard is treated as exact', () => {
+    const result = parsePermissionRule('echo \\*')
+    expect(result.type).toBe('exact')
+  })
+})
+
+// ─── suggestionForExactCommand ──────────────────────────────────────────
+
+describe('suggestionForExactCommand', () => {
+  test('creates addRules suggestion', () => {
+    const result = suggestionForExactCommand('Bash', 'npm install')
+    expect(result).toHaveLength(1)
+    expect(result[0]!.type).toBe('addRules')
+    expect((result[0] as any).rules[0]!.toolName).toBe('Bash')
+    expect((result[0] as any).rules[0]!.ruleContent).toBe('npm install')
+    expect((result[0] as any).behavior).toBe('allow')
+  })
+})
+
+// ─── suggestionForPrefix ────────────────────────────────────────────────
+
+describe('suggestionForPrefix', () => {
+  test('creates prefix suggestion with :*', () => {
+    const result = suggestionForPrefix('Bash', 'npm')
+    expect((result[0] as any).rules[0]!.ruleContent).toBe('npm:*')
+  })
+})
+
+// ─── compiled-pattern / parsed-rule caches (2.1.208 parity) ─────────────
+
+describe('pattern caches preserve decision equivalence', () => {
+  test('repeated matches hit the cache with identical results', () => {
+    // First call compiles, subsequent calls hit the cache — results must
+    // be identical, including the stateless .test() behavior (no 'g' flag).
+    for (let i = 0; i < 3; i++) {
+      expect(matchWildcardPattern('git *', 'git add file.ts')).toBe(true)
+      expect(matchWildcardPattern('git *', 'npm install')).toBe(false)
+      expect(matchWildcardPattern('git \\*', 'git *')).toBe(true)
+    }
+  })
+
+  test('case-insensitive variant is cached under a distinct key', () => {
+    expect(matchWildcardPattern('GIT *', 'git add', false)).toBe(false)
+    expect(matchWildcardPattern('GIT *', 'git add', true)).toBe(true)
+    // Repeat to exercise both cache entries
+    expect(matchWildcardPattern('GIT *', 'git add', false)).toBe(false)
+    expect(matchWildcardPattern('GIT *', 'git add', true)).toBe(true)
+  })
+
+  test('rule-set changes are inherently cache-safe (keys ARE the rule strings)', () => {
+    // Flipping a rule from allow to deny means the CALLER consults a
+    // different rule list — the cache is keyed by rule string, so a changed
+    // rule is a different key and stale entries can never be consulted.
+    expect(parsePermissionRule('git:*')).toEqual({
+      type: 'prefix',
+      prefix: 'git',
+    })
+    expect(parsePermissionRule('git push:*')).toEqual({
+      type: 'prefix',
+      prefix: 'git push',
+    })
+    // Cached instance is shared and stable across calls
+    expect(parsePermissionRule('git:*')).toBe(parsePermissionRule('git:*'))
+  })
+})

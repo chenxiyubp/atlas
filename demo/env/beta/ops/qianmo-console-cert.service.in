@@ -1,0 +1,17 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 控制台证书续期（systemd --user 单元，由同名 .timer 每天触发一次）。
+#
+# **这是模板**，由 `console-https.sh install` 派生。`lego run` 在证书未到期时什么都不做；
+# 到期前续签成功才会调部署钩子（`console-https.sh deployed`），由它重启 TLS 前置。
+# DNS 凭据只在 lego 那一个进程的环境里，见 console-https.sh 头注。
+
+[Unit]
+Description=Qianmo beta console certificate renewal (lego, DNS-01)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=@OPS_DIR@/console-https.sh renew

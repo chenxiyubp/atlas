@@ -1,0 +1,7 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+
+[toolchain]
+channel = "1.85.0"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

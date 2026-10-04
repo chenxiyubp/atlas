@@ -1,0 +1,58 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# dormice-harden.service —— 让 harden-dormice-host.sh 的防火墙规则在 docker
+# 的整个生命周期里持续存在。
+#
+# 为什么必须绑 docker.service，而不是开机跑一次就完事
+# ----------------------------------------------------
+# docker 启动/重启时会 flush 并**重建** DOCKER-USER 链，链里的规则随之消失；
+# 同时它也会重排 INPUT/FORWARD 上与 docker 网络相关的规则。也就是说，任何一次
+# `systemctl restart docker`（升级、改 daemon.json、故障恢复）都会把加固悄悄
+# 抹掉，而且没有任何报错。PartOf=docker.service 让本 unit 随 docker 一起
+# 停止与重启，重启即重新执行加固脚本 —— 这是实测验证过的路径：手动删掉两条
+# 规则后 `systemctl restart docker`，规则被自动重新加上。
+#
+# 各字段的理由
+#   Type=oneshot        脚本跑完就退出，不是常驻进程
+#   RemainAfterExit=yes 退出后 unit 仍记为 active，否则 PartOf 的联动语义与
+#                       `systemctl status` 的可读性都会变成"永远 inactive"
+#   Requires=docker.service  没有 docker 就没有 docker0 与 DOCKER-USER，
+#                            此时加固既无对象也无意义
+#   After=docker.service     必须等 docker 建好网卡与链之后再插规则，否则
+#                            DOCKER-USER 尚不存在（脚本会跳过纵深那一层）
+#   PartOf=docker.service    见上：docker 重启 -> 本 unit 重启 -> 规则重加
+#
+# 幂等由脚本保证（先删同规则再插链首），所以本 unit 被反复触发是安全的。
+#
+# 不含任何主机名 / IP 地址 / 用户名 / 凭据。端口与网卡名如需覆盖，用下面注释掉
+# 的 Environment= 行，或放到 /etc/default/dormice-harden 里由 EnvironmentFile
+# 读取（同样只写变量，不写机器信息）。
+#
+# 安装
+#   install -m 0755 harden-dormice-host.sh /usr/local/sbin/harden-dormice-host.sh
+#   install -m 0644 dormice-harden.service /etc/systemd/system/dormice-harden.service
+#   systemctl daemon-reload
+#   systemctl enable --now dormice-harden.service
+#
+# 验证
+#   systemctl restart docker && systemctl status dormice-harden.service
+#   iptables -S INPUT | grep -- --dport   # 规则应重新出现在链首
+
+[Unit]
+Description=Qianmo P0.7: block sandbox containers from reaching the host Dormice daemon
+Documentation=man:iptables(8)
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/harden-dormice-host.sh
+# Environment=DORMICE_DAEMON_PORT=<port>
+# Environment=DORMICE_DOCKER_IF=<bridge-interface>
+# EnvironmentFile=-/etc/default/dormice-harden
+
+[Install]
+WantedBy=multi-user.target

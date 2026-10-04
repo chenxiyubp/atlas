@@ -1,0 +1,30 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 控制台的 TLS 前置（systemd --user 单元）。
+#
+# **这是模板**，由 `console-https.sh install` 把 @…@ 换掉之后写进 <内测根>/ops/ 与
+# ~/.config/systemd/user/。参数在 @OPS_DIR@/console-https.env 里，改参数就重跑 install。
+#
+# 和控制台、注册中心那两个 oneshot 单元不同，它是 `Type=exec` + `Restart=always`：
+# 它是用户唯一的对外入口，挂了就该被拉回来；它自己没有状态，重起一次的代价只是
+# 正在进行的请求与聊天流断一下（浏览器会自己重连）。
+#
+# 存活判据不是单元状态，是真握手一次：
+#   curl -s -o /dev/null -w '%{http_code}' https://<域名>:<端口>/v0/health   # 要 200
+
+[Unit]
+Description=Qianmo beta console TLS front (public HTTPS -> loopback console)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+EnvironmentFile=@OPS_DIR@/console-https.env
+ExecStart=@BUN@ @OPS_DIR@/console-tls-front.ts --listen ${CONSOLE_HTTPS_LISTEN} --upstream ${CONSOLE_HTTPS_UPSTREAM} --cert ${CONSOLE_HTTPS_CERT} --key ${CONSOLE_HTTPS_KEY}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

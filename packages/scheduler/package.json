@@ -1,0 +1,23 @@
+{
+  "name": "@qianmo/scheduler",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Qianmo hub-side watch-job scheduler: one-shot reservations, at-most-once claims across processes, and catch-up collapse — the hub holds the timing so the node holds none.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qianmo/protocol": "workspace:*"
+  }
+}

@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 🔒 报告安全问题
+    url: https://github.com/sweetcornna/atlas/security/advisories/new
+    about: 安全问题请走私密通道，不要开公开 issue — 边界与流程见 SECURITY.md。
+  - name: 📖 项目文档
+    url: https://github.com/sweetcornna/atlas#readme
+    about: 提交 issue 前，请先阅读 README、docs/dev/ 下的设计文档和 CLAUDE.md，你的问题可能已经有答案了。
+  - name: 🧩 基座 open-claude-code
+    url: https://github.com/sweetcornna/open-claude-code/issues
+    about: 问题出在基座 CLI 本身（非 @qianmo/* 部分）时，请报到上游仓库。

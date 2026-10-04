@@ -1,0 +1,1874 @@
+阡陌 AgentNest (Qianmo AgentNest)
+Copyright 2026 Qianmo AgentNest Team
+
+本文件说明本仓库的许可范围、基座溯源与商标注意事项。
+This file states the license scope, base provenance and trademark notices for
+this repository.
+
+（中文在前，English follows. 两部分内容等同。）
+
+================================================================================
+一、许可
+================================================================================
+
+一.1 两层与判据
+----------------------------------------
+
+本仓库是**双许可仓库**，两层各有各的许可，分界线就是成果边界本身：
+
+  * **阡陌自有代码 —— GNU AGPL-3.0-or-later**（根目录 `LICENSE`）。
+    包括 `packages/` 下 `@qianmo/*` 命名空间的 workspace 包、对基座运行时的
+    常驻化改造、`demo/` 下的演示与验收套件，以及阡陌团队撰写的文档
+    （`docs/dev/` 等）。判据是**文件头**：带
+    `SPDX-License-Identifier: AGPL-3.0-or-later` 与
+    `Copyright 2026 Qianmo AgentNest Team` 两行的文件属于这一层——锚定提交 `d08b16c3`（新增
+    `docs/dev/spdx-backfill-retro.md` 的那一笔）之后，共 647 个文件。每新增一个带该文件头的文件这个数就会变，
+    所以真正作数的是下面那条命令，不是这个数字。
+
+一.2 判据不覆盖的那 83 个文件
+----------------------------------------
+
+    **这条文件头判据不覆盖全部阡陌自有文件。**截至 2026-09-26，**不在基座快照那
+    棵树里、又不带这两行文件头的文件共 83 个**（2026-08-30 时是 87 个，差的 4 个
+    是 2026-09-26 移出仓库的申报文书，见「一.7」C 类）——这是下面那条命令给出的定义，按
+    路径判据划的一侧，**不是一句所有权主张**。`LICENSE.base` 就落在这 83 个里而
+    它并非阡陌自有：那条路径是阡陌新增的（快照里没有它），内容却是上游 MIT 许可
+    正文的逐字保留件；它在这一侧只说明路径判据到此为止，判据的这处边界见本节后面
+    「这条判据也有它答不了的问题」一段。
+
+    这 83 个里有 79 个按文件格式成类，不加头的理由有两种：一类是
+    **二进制或纯数据格式，本来就没有注释语法**——27 个 `.jpg`、3 个 `.png`，
+    以及 28 个 `.json`（JSON 语法不含注释，其中 20 个是 `package.json`）；另一类
+    **技术上带得了注释，但它们是生成件与工具配置、不是源文件，加了会被工具覆盖或
+    没有意义**——20 个 `tsconfig.json`（TypeScript 按 JSONC 解析，接受 `//` 注释）与
+    `packages/audio-capture-napi/native/Cargo.lock`（TOML，支持 `#` 注释：它的头
+    两行就是 Cargo 自己写的注释，第二行还明写 "It is not intended for manual
+    editing"，人工加进去的行会在下次生成时被抹掉）。**余下 4 个既带得了注释、也
+    不是生成件，却是有意不加**，理由逐个不同：
+
+      - `BASE.md` —— 基座溯源的唯一真源。仓库规矩是只有「导入」与「上游同步」
+        两类事件才允许改它，功能性提交一律不得触碰；
+      - `LICENSE.base` —— 里面是上游 MIT 许可正文的逐字保留件，给它加一行
+        AGPL 声明会构成**虚假陈述**；
+      - `NOTICE` —— 本文件自身，是许可声明文件本体。下一条判据里
+        `awk -F: '$2<=5'` 那个前 5 行限定正为此而设：它让本文件正文中引用的
+        那行标识符不把自己算进计数；
+      - `packages/audio-capture-napi/native/.gitignore` —— 工具配置文件而非源
+        文件，与同目录的 `Cargo.lock` 同理，给它加一行许可声明没有意义；它不归
+        上面那两个格式类别中的任何一个，所以在这里单列。
+
+    本文此前写的「其余是应补而未补的源文件与文档，正由单独一批提交补齐」已经
+    过时——补齐工作于 2026-08-30 完成（66 个文件），上面那 83 个是补齐之后、
+    再减去 2026-09-26 移出的 4 份申报文书的余量。个数会随工作推进而变，现算的
+    命令（不写死个数）：
+
+        # 阡陌自有（即不在基座快照那棵树里）却缺文件头的文件——按扩展名与具名
+        # 路径两类拆开报数，同时报出带头文件数、阡陌自有总数与快照树大小
+        bun run check:license-headers --report
+
+    这条从前是内联在本文件里的一段 `comm -23 <(git ls-files) <(git ls-tree …)`
+    管道，现已换成对门禁 `scripts/check-license-headers.ts` 的引用：同一个事实只该
+    有一处出处，手抄的第二份副本会漂。**非 ASCII 文件名那个坑仍在，只是改由门禁内
+    部处理**——`git ls-files` 默认把非 ASCII 路径输出成带双引号的八进制转义形式，
+    那种名字喂给 `head` 读不到文件、会被静默跳过而少算，本仓库现有 29 个这样的文件
+    名（`git -c core.quotePath=false ls-files | LC_ALL=C grep -c '[^ -~]'` 可核）。
+
+    **门禁把 `.json` 报成一档，上面把它拆成两类理由，是同一批文件的两种切法**：
+    28 个「JSON 语法不含注释」加 20 个 `tsconfig.json`「是工具配置不是源文件」，
+    28 + 20 恰是门禁 `.json` 那一档的 48。门禁只需要知道它们都豁免，上面那个拆分
+    记的是**为什么**豁免。
+
+一.3 文件头只在一个方向上作数
+----------------------------------------
+
+    文件头只在一个方向上作数，而且两个方向的形状差得很远：
+
+      - **带头 ⇒ 属于 AGPL 层**——成立，且已对着权威判据（该文件在不在
+        `base-snapshot/v2.46.0` 那棵零改动快照里）全量核过一遍：647 个带头的
+        文件里**零反例**（在提交 `d08b16c3`——即新增 `docs/dev/spdx-backfill-retro.md` 的那一笔——上实测）。这半句因此不是"我们这么规定"，
+        而是实测如此，两条判据在这个方向上完全一致。它同样可证伪——将来谁把
+        一行头误贴到某个基座文件上就会出反例——正因如此，它作为**核对手段**
+        比作为断言更有用：下面这条命令就是"有没有人把 AGPL 头误贴到基座文件
+        上"的检查，它报"基座文件误贴 0"才算过。
+
+            bun run check:license-headers
+
+        它同样不再是内联管道——与上面那条报数命令是同一道门禁，一次把三个方向
+        都查了。它先打一行环境行（判据标签、快照树文件数、跟踪文件总数、阡陌自有
+        数），再打一行判定行。**环境行那几个数随仓库增删而变，这里不抄——现跑现
+        看**；判定行实测如下，三个 0 才算过：
+
+            [license-headers] OK：阡陌自有缺头 0（另有 83 个在豁免表内），基座文件误贴 0，豁免文件被盖章 0
+
+        **门禁查的是三件事，与上面那两个推断方向不是一回事**：①**漏加**——阡陌
+        自有、不在豁免表内、前 5 行没有那两行；②**误贴**——前 5 行带那行 SPDX、
+        文件却在基座快照树里，也就是本段说的反例；③**豁免文件被盖章**——上面那 4
+        个（连同 `Cargo.lock` 共 5 个具名豁免）是**有意**不加头、不是带不了头，所
+        以豁免是双向的：不要求带，也**不许**带。给 `LICENSE.base` 盖上一行 AGPL 头
+        正是本文件上面称之为**虚假陈述**的那件事。**一处例外**：`NOTICE` 自身只禁
+        SPDX 行、不禁版权行——它第 2 行的 `Copyright 2026 Qianmo AgentNest Team`
+        是它作为许可声明文件本应有的版权声明。
+
+        **还有一处口径要分清，别把两个数当成同一个**：门禁报的"带头文件"是**两行
+        俱全**（版权行与 SPDX 行都落在前 5 行内），而下面「一.5」里那条
+        `git grep … | awk -F: '$2<=5'` 只数 SPDX 行。两者今天给出同一个数（缺版权
+        行的文件为 0），但定义不同——将来出现只写了 SPDX 行的文件就会分叉，两条各
+        跑一次比一比即可。
+
+      - **没有文件头 ⇒ 属于基座 MIT 层**——**不成立**。理由不再是「还有一批
+        没补完」，而是上面那 83 个不在快照树里、又无头的文件：其中 **82 个是
+        这条推断的反例**。**剩下那一个是 `LICENSE.base`，它不是反例**——它无头，
+        而内容逐字就是上游 MIT 正文，按内容本就落在 MIT 那一层，推断在它身上
+        恰好蒙对了；但那是巧合而非判据生效，因为这两条判据看的都是路径、不是内
+        容（见上面的计数句与本节后面「这条判据也有它答不了的问题」一段）。它也
+        是这 83 个里唯一的一例：逐个比对内容后，只有它与快照里的某个文件逐字节
+        相同。另有一层更细的不成立：下一条要说的 180 个被阡陌改造过的基座文件
+        **确实**属于基座那一层，但文件里的阡陌改动并不因此变成 MIT——按来源分层
+        不等于按行分许可。（它们分发时按什么许可，见下一条 bullet。）
+
+一.4 这条判据也有它答不了的问题
+----------------------------------------
+
+    权威判据是该文件是否存在于 `base-snapshot/*` 快照，见下方"二、基座溯源"。
+    **这条判据也有它答不了的问题，一并说明，不要拿它当许可结论用**：它回答的是
+    「这个文件是不是随基座导入进来的」，**不是**「这个文件按什么许可授出」。
+    `LICENSE.base` 就是一个站着的反例——那条路径是阡陌新增的（快照里根本没有
+    它），按权威判据落进阡陌 AGPL 层，而它的内容逐字是上游的 MIT 许可正文；
+    **两条判据在它身上都给不出正确答案**，这正是它被列进上面那 4 个"有意不加头"
+    的原因。另有一类落差同样要如实说：按这条判据落在阡陌层的还有 27 张 `.jpg`、
+    3 张 `.png` 等**非代码资产**，而 **AGPL-3.0 是软件许可**——这些作品适用什么
+    许可不由这条判据决定，而是按用途另分三类各自定的：自制作品按 CC BY-SA 4.0 授
+    出，第三方标识不授出，申报文书保留所有权利（已于 2026-09-26 移出当前版本）。
+    清单、依据与其中一张 AI 生成件的如实注明见下面「一.7 非代码资产的许可」。
+
+一.5 基座 MIT 层，与被改造过的那 180 个文件
+----------------------------------------
+
+  * **由基座导入的代码 —— MIT License**（根目录 `LICENSE.base`，上游原文
+    逐字保留）。基座文件**不带 SPDX 头**，这条正是两层的机器可判据：
+
+        # 属于 AGPL 那一层的文件——这条命令读的是你当前的树，不是某一个提交；
+        # 在提交 `d08b16c3`（新增 `docs/dev/spdx-backfill-retro.md` 的那一笔）上，
+        # 它列出 647 个（限定在文件头，
+        # 因此不会把本文件这类"正文里引用了这行字"的文档算进去）
+        git grep -n "SPDX-License-Identifier: AGPL-3.0-or-later" \
+          | awk -F: '$2<=5' | cut -d: -f1 | sort -u
+
+    **被阡陌改造过的基座文件仍然不带 SPDX 头。这是有意为之，不是漏加。**截至
+    2026-08-30，快照里存在、而当前树中内容已变的基座文件共 180 个，其中带 AGPL
+    文件头的是 0 个（另有 135 个快照里的文件已被删除。**180 + 135 = 315 说的是
+    本次 diff 里落在快照路径上的条目数，不是快照的大小**：快照那棵树共 4,171 个
+    文件——`git ls-tree -r --name-only base-snapshot/v2.46.0 | wc -l` 可核——
+    其余 3,856 个基座文件至今原样未动）：
+
+        # 被改造过的基座文件——存在于快照、内容已变
+        git diff --name-only --diff-filter=M base-snapshot/v2.46.0..HEAD
+        # 其中带 AGPL 文件头的（预期为空）
+        git -c core.quotePath=false diff --name-only --diff-filter=M \
+            base-snapshot/v2.46.0..HEAD \
+        | while IFS= read -r f; do
+            head -5 "$f" | grep -qa 'SPDX-License-Identifier: AGPL-3.0-or-later' \
+              && printf '%s\n' "$f"
+          done
+
+    **这 180 个文件分发时按什么许可，在这里说清，不要靠两条 bullet 相减去推。**
+    文件头——以及"带不带头"这个标记本身——标的是**来源层**：它回答的是「这个文件
+    是不是随基座导入进来的」，**不回答**「文件里哪些行来自上游」，更**不是**"这个
+    文件按 MIT 授出"的意思。**文件层的来源分类答不了逐行归属**——后者只能查逐行
+    历史（`git diff base-snapshot/v2.46.0..HEAD -- <文件>`）。根目录的 `LICENSE`
+    就是这个区分的极端例子：那条路径**存在于快照**（`git cat-file -e
+    base-snapshot/v2.46.0:LICENSE` 成功），按判据属基座来源；而它今天的内容是
+    29 行 MIT 正文被整体换成 661 行 AGPL 正文（`git diff --numstat
+    base-snapshot/v2.46.0..HEAD -- LICENSE` 报出 `661` 与 `29` 两列，这两个数
+    分别等于两个版本各自的全部行数——`wc -l LICENSE` 与 `git show
+    base-snapshot/v2.46.0:LICENSE | wc -l` 可核——所以一行上下文都没有），
+    **文件里没有任何一行来自上游**。一个来自基座、其后被阡陌改动过的文件，
+    **只要里面还留着上游的表达**，分发出去的就是**组合作品**：其中上游那部分继续
+    适用 MIT（这正是 `LICENSE.base` 逐字保留的原因，MIT 的保留义务由它履行），
+    阡陌加进去的部分是 AGPL 作品。**但"组合作品"不能对这 180 个文件作全称断言**
+    ——上游内容被整体替换掉的文件不是组合作品，因为里面没有上游表达可供组合。
+    刚论证过的根 `LICENSE` 就落在这 180 个里，它一行上游内容都不剩；**但"没有
+    上游的表达"与"没有别人的表达"是两件事，不能混成一句**：那 661 行是 FSF 的
+    AGPL-3.0 许可正文，阡陌一行都没写——`sed -n '1,6p' LICENSE` 可见第 4–6 行
+    写着 "Copyright (C) 2007 Free Software Foundation, Inc." 与 "changing it is
+    not allowed"。**所以根 `LICENSE` 既不是组合作品、也不是阡陌的 AGPL 作品，
+    它就是那份许可文本本身**：著作权属 FSF，只许逐字复制、明文禁止修改。这与本
+    文件上面对 `LICENSE.base` 的说法同源——许可正文的逐字保留件上不该再压一层许
+    可声明——不另立一套说法。**上面那个"两列数分别等于两个版本各自全部行数"的比
+    法套不到全部 180 个上**：它读的是 `git diff --numstat` 报出的两列行数，而
+    这 180 个里有 7 条压根没有行数——`.gitattributes` 把 `*.node` 标成 `binary`、
+    把 `bun.lock` 标成 `-diff`，numstat 对它们两列都报 `-`：
+
+        # 那条比法适用不到的条目（7 条：六个 .node 与 bun.lock）
+        git diff --numstat --diff-filter=M base-snapshot/v2.46.0..HEAD \
+          | awk '$1=="-"{print $3}'
+        # 它们没有行数的原因
+        grep -nE '\.node|bun\.lock' .gitattributes
+
+    所以按那条比法筛过的是余下 173 个文本条目，结论也只限于它们：眼下满足整体
+    替换的只有 `LICENSE` 一个，而它正是许可正文；其余每一个都还留着来自快照的
+    行。**那 7 条要另外说，而且其中六个 `.node` 也是整体替换**——它们与快照里的
+    同名文件根本不是同一个 blob：
+
+        # 六个 .node 与快照里的同名文件都不是同一个 blob
+        for t in arm64-darwin x64-darwin arm64-linux x64-linux \
+                 x64-win32 arm64-win32; do
+          p="vendor/audio-capture/$t/audio-capture.node"
+          git rev-parse "base-snapshot/v2.46.0:$p" "HEAD:$p" | tr '\n' ' '
+          echo "$t"
+        done
+
+    它们里面没有上游的表达可供组合，所以**"组合作品"这条理由对它们不成立**；它
+    们落在哪一层的依据在**下一条 bullet**（「`vendor/audio-capture/` 的例外已
+    不存在」那条）——那六个 `.node` 已由本仓库自有的 AGPL 源码重新构建，是那份
+    源码的构建产物，随源码一同分发并适用同一许可，这里不另立一套说法。余下那条
+    `bun.lock` 不是整体替换：它是生成的依赖锁文件，当前版本里仍有大量条目原样
+    来自快照，按下面"组合作品"那条理由处理。
+
+        # bun.lock 不是整体替换（bash/zsh）：改动量远小于两版各自的总行数
+        git show base-snapshot/v2.46.0:bun.lock | wc -l
+        git show HEAD:bun.lock | wc -l
+        git diff --no-index --numstat \
+          <(git show base-snapshot/v2.46.0:bun.lock) <(git show HEAD:bun.lock)
+
+    **把许可正文这类文件单独摘出来之后，结论不打折扣**：**这些文件整体只能按
+    AGPL-3.0-or-later 的条款分发**——文本条目是组合作品，因为其中的阡陌部分是
+    AGPL 作品；那六个 `.node` 不是组合作品，但它们随其 AGPL 源码分发、适用同一
+    许可。MIT 宽松、可被并入 AGPL 作品，方向上不冲突；但**"按来源分层"绝不等于
+    "可按 MIT 取走"**——取走这 180 个文件（连同里面的阡陌改动）不受 MIT 约束；
+    除根 `LICENSE` 这份许可正文本身按 FSF 的逐字复制条款外，其余受 AGPL 约束。
+
+    不给它们加头有三条理由：① 文件头标的是**文件的来源层**，不是逐行作者——一个
+    来自基座、其后被阡陌改动过的文件，仍然是基座来源的文件；② **这是我们自己定
+    的标记规矩，不是 MIT 的要求**——MIT 要求的是"在副本中包含许可与版权声明"，
+    本仓库由逐字保留的 `LICENSE.base` 履行；它并不禁止我们在文件上加别的标识，
+    加一行 SPDX 也抹不掉任何东西。我们不加，是为了让"带头 / 不带头"这个标记继续
+    **只表示来源层**——一旦给改造过的基座文件也加上，这个标记就同时表示两件事、
+    不再可判；③ 本仓库按每 2–4 周的节奏跟随上游（docs/dev/charter.md §5.7），在
+    文件顶端插三行只在**上游也改到该文件头部时**才冲突，**不是每次同步都 180
+    处**，但最坏情况下可以多到 180 处。那些文件里哪些行是阡陌写的，由 git 历史
+    记录——命令就是下方"二、基座溯源"给出的工作面命令。根目录的 `LICENSE` 本身
+    就在这 180 个里，也就是本条开头用过的那个极端例子：路径来自基座，上游内容
+    一行不剩。
+
+    详见下方"二、基座溯源"。
+
+一.6 `vendor/audio-capture/` 的六个构建产物
+----------------------------------------
+
+  * **`vendor/audio-capture/` 的例外已不存在，但它们落在哪一层要另作说明**：
+    那六个预编译 `.node` 此前全部源码缺失，现已全部由本仓库自有源码
+    （`packages/audio-capture-napi/native/`，其中 `.rs` 与 `.toml` 源文件都带
+    AGPL-3.0-or-later 文件头；同目录的 `Cargo.lock` 与 `.gitignore` 不带——
+    它们是生成件与工具配置，不是源文件）重新构建——`arm64-darwin` /
+    `x64-darwin` / `arm64-linux` / `x64-linux` 四项于 2026-08-30 完成替换，
+    `x64-win32` / `arm64-win32` 两项同日
+    由 GitHub Actions 的 `windows-latest` runner 构建后装入。**它们属于 AGPL 层，
+    但依据不是文件头，而是它们是那份 AGPL 源码的构建产物**——衍生自该源码、
+    并与该源码一同分发，因此随源码适用同一许可。对应的 Corresponding Source
+    **不止 `native/` 一处**——AGPL-3.0 §1（与 GPL-3.0 §1 同文）把"控制编译与安装
+    的脚本"也算在内，因此它至少包括：本仓库里的
+    `packages/audio-capture-napi/native/`（crate 源码与 `Cargo.lock`；同目录下的
+    `build.rs`、`rust-toolchain.toml`、`.cargo/config.toml` 同属"控制编译"的材料
+    ——后两者分别钉定工具链版本与 `+crt-static` 之类的链接参数——但它们都在
+    `native/` 目录内，随该目录一并覆盖，不必单列）、
+    `scripts/build-audio-capture.sh`、它读取的
+    `scripts/audio-capture-cross.toml`（Linux 交叉构建时喂给 `cross` 的配置，
+    `grep -n CROSS_CONFIG_FILE scripts/build-audio-capture.sh` 可见构建脚本直接
+    引用它），以及 `.github/workflows/build-audio-capture-windows.yml`。**这三样
+    都不在 `native/` 目录下**；其中构建脚本与工作流，本文件第五节也把它们列为
+    溯源要素，那份 `cross` 配置第五节未单列。
+
+    **一处已知缺口，如实写明**：这六个 `.node` 静态链接了 `Cargo.lock` 记录的第三
+    方 Rust crate（该文件共 122 个 package 条目，含仅构建期用到的），而本仓库的
+    SBOM（`docs/dev/sbom-m0.json` / `sbom-m0.md`）**输入只有 `bun.lock` 与
+    `node_modules` 的 `license` 字段**，整个 Rust 依赖树不在其覆盖范围内
+    （`grep -c 'pkg:cargo' docs/dev/sbom-m0.json` 为 0 可核）。**这是待补项**，
+    本文件不声称它已被覆盖。
+
+    **缺的不只是清单，还有定性**：`Cargo.lock` 记录的那些被链接进产物的第三方
+    crate，算不算 AGPL-3.0 §1 意义上 Corresponding Source 的一部分，**本文件不作
+    法律断言**。能如实说的只有事实：这些 crate 的源码按其各自许可公开可取，用
+    到哪个版本由 `Cargo.lock` 逐条锁定，而该文件本身就在本仓库里、随源码一同
+    分发。**分发时是否还须把这些 crate 的源码一并提供，留待负责人裁定**，本文件
+    不代为下结论。
+
+    有两点必须与上一条判据一起读，以免拿那条判据去套它们：
+
+      - 上面那条 `git grep … | awk -F: '$2<=5'` 是**针对带文件头的源文件、文档与配置文件**的判据——它读的
+        是文件头——二进制形态本来就不在它的适用范围内。因此这六个 `.node`
+        **不在那个计数里**——它报出来的 647 个全是带该文件头的源文件、文档或配置文件。照那条命令跑一遍，
+        输出里本来就不会有它们，那不是遗漏。
+      - 「不带 SPDX 头 ⇒ 落在基座 MIT 层」这个反向推断**对二进制不成立**。上一条
+        说的是基座与阡陌两层**源文件**之间怎么分，不是给随仓库分发的构建产物
+        定性的规则。
+
+    **另有一处验证缺口**：`arm64-win32` 从未在任何机器上被加载或执行过（构建它的
+    runner 是 x86_64，加载不了 aarch64 的 DLL），它取得的证据只有构建成功、
+    `clippy -- -D warnings` 干净与结构性核对。**那是验证缺口，不是许可缺口**——
+    它与其余五个同出一份源码，许可上没有待定项。逐 triple 的证据等级见下方
+    "五、第三方组件"。
+
+一.7 非代码资产的许可
+----------------------------------------
+
+上面那条路径判据把 30 个**非代码资产**划进了阡陌层（2026-08-30 定类时是 34 个，
+其中 4 份申报文书已于 2026-09-26 移出当前版本，见下面 C 类），而 AGPL-3.0 是软件
+许可，套不到图片与文书上。它们全部是申报材料，全部由立项初始化提交 `67f6081`
+（早于基座导入提交 `3380c88`）一笔入库，与运行时代码零耦合——不进构建、不进
+`dist/`，仓库里除 `docs/` 与本文件外没有任何地方引用它们：
+
+    # 无输出。末尾两个排除项不能省：`docs/` 下是引用它们的文档本身，而**本文件
+    # 自己也写着这两个路径**——判据类文档会匹配到自己，漏掉 ':!NOTICE' 这条命令
+    # 就永远不会为空。
+    git -c core.quotePath=false grep -Il 'assets/brand\|assets/charts' \
+        -- . ':!docs' ':!NOTICE'
+
+**按用途分三类，各自的许可分别定如下。**
+
+个数与上面「27 张 `.jpg`、3 张 `.png`」是同一批文件的两种切法：A 类 26 张
+`.jpg` + 1 张 `.png` = 27，B 类 1 张 `.jpg` + 2 张 `.png` = 3；合计 27 + 3 = 30，
+与按扩展名合计的 27 + 3 = 30 逐项对得上。C 类在当前版本里是 0 个（原先是 2 份
+`.pdf` + 2 份 `.docx` = 4，2026-08-30 时三类合计 34）。按扩展名的那一组数由
+`bun run check:license-headers --report` 现算（见上面「一.2」），按类别的划分逐条
+列在下面，可自行数一遍。
+
+  * **A 类 · 自制作品 —— CC BY-SA 4.0**（SPDX 标识符 `CC-BY-SA-4.0`，许可 URI
+    https://creativecommons.org/licenses/by-sa/4.0/）。清单是 `docs/assets/charts/`
+    下的全部 24 张信息图（该目录下只有 `.jpg`，`git -c core.quotePath=false
+    ls-files docs/assets/charts | wc -l` 现为 24），加上
+    `docs/assets/brand/正文页背景.jpg`、`docs/assets/brand/愿景水墨图.jpg` 与
+    `docs/assets/brand/ChatGPT Image Aug 10, 2026, 07_23_41 PM.png`。
+
+    **许可正文不入库是有意的**：CC BY-SA 4.0 §3(a)(1) 只要求保留一个指向该许可的
+    URI，不像 GPL 系那样要求随附全文；入库反而给仓库多添一个既不带文件头、又要进
+    门禁豁免表的文件。
+
+    **那张 `.png` 是 AI 生成件，如实注明**：它内嵌 OpenAI 的 C2PA Content
+    Credentials——`digitalsourcetype/trainedAlgorithmicMedia`、生成器标为
+    `gpt-image`、签名链含 `OpenAI Media Service API` 与 `OpenAI OpCo, LLC`。
+    **AI 生成物的可版权性在部分法域存疑**；我方只就自己实际享有的权利授出，
+    **不因这条 CC BY-SA 声明而主张超出实际享有的权利**。
+
+        # 30 个资产里带 C2PA 痕迹的（只有这一个）
+        git -c core.quotePath=false grep -lai c2pa -- docs/assets
+
+    **其余 29 个扫 `c2pa` 全部 0 命中，但"没有 C2PA"不等于"不是 AI 生成"**——重编
+    码、裁剪、另存都会把 C2PA 剥掉，这条证据只能证有、不能证无。所以本节不写"其余
+    均非 AI 生成"。
+
+    **那 24 张信息图是用什么做的，仓库里没有记录，也没有生成脚本，因此这里不写来
+    源断言。**能读出来的事实只有三条，而且要连着它们的来源一起读：**ImageMagick
+    读出的 EXIF 标签**在 24 张上完全相同，且只有 `ColorSpace` / `ExifOffset` /
+    `PixelXDimension` / `PixelYDimension` 四项；**其中没有相机标签**（`Make` /
+    `Model` / `DateTimeOriginal`），**也没有 `Software`**；长边恒为 1500 px（其中
+    4 张是 1000×1500 的竖版），不是常见的屏幕分辨率。**前两条是"identify 没报
+    出"，不是"文件里没有"**——MakerNote、它跳过的 IFD 与非标准段都可能不进它的
+    输出，与上面 C2PA 那条同理，只能证有、不能证无。**由此只能推出"不是相机照
+    片、几乎肯定不是屏幕截图"，推不出"由谁、用什么画的"。**
+
+        # EXIF 标签集（需 ImageMagick）：只输出一行，说明 24 张完全一致
+        for f in docs/assets/charts/*.jpg; do
+          identify -format '%[EXIF:*]' "$f" | cut -d= -f1 | sort | tr '\n' ' '; echo
+        done | sort | uniq -c
+        # 长边（只输出 1500）
+        identify -format '%w %h\n' docs/assets/charts/*.jpg \
+          | awk '{print ($1>$2?$1:$2)}' | sort -u
+
+  * **B 类 · 第三方标识 —— 不随本仓库任何许可授出**（3 个）：
+    `docs/assets/brand/大赛logo大图.png`、`docs/assets/brand/大赛logo横版.png`，
+    以及 `docs/assets/brand/封面.jpg`——**那个标识被合成进了封面画面**，不是删掉
+    一个文件就能择出来的。它是**中国国际大学生创新大赛**的官方标识，而**仓库内没
+    有任何授权记录、来源记录或使用许可**。三个文件仅为申报材料原样保留，
+    **第三方不得依据本仓库的许可复用**。明细、证据等级与可核命令见下方
+    "五、第三方组件"。
+
+  * **C 类 · 申报文书 —— 保留所有权利（All rights reserved），已于 2026-09-26 移出
+    仓库**（当前版本 0 个，原 4 个）：`docs/阡陌项目计划书.docx` / `.pdf` 与
+    `docs/阡陌创新训练项目申请书.docx` / `.pdf`。**它们从来不随本仓库任何开源许可
+    授出。**2026-09-26 负责人决定把它们从当前版本移出、原件另行保存，**但不改写
+    历史**：移出之前的提交（自立项初始化提交 `67f6081` 起）与此前发行的源码包里
+    仍然有它们。无论从哪个历史版本或源码包取得，本条口径照样适用——不能依据本仓
+    库的许可使用、复制或再分发它们。
+
+    定为这一类的理由有两条：① 正文含团队成员的学号、联系电话与电子邮箱，以及成员
+    与指导教师的姓名等个人信息，这也是移出的原因；② 内嵌 B 类的第三方标识。**第二
+    条只对其中一份成立，不要写满**——`docs/阡陌项目计划书.docx` 的 `word/media/`
+    里有 B 类那三个标识的逐字节相同副本，而 `docs/阡陌创新训练项目申请书.docx` 的
+    9 个内嵌媒体全部是 A 类信息图、不含 B 类；两份 `.pdf` 是同源导出件，PDF 会重
+    编码图像流，同样的字节比对在它们身上做不了，所以这里**不对 `.pdf` 的内嵌情况
+    作断言**，它们按理由①落在这一类。
+
+        # 只适用于历史版本：两份 .docx 已不在当前版本里。先找到删除它们的那一笔，
+        # 从它的父提交取出文件，再逐字节比对 word/media/ 与 B 类那三个标识
+        rev=$(git log -1 --format=%H --diff-filter=D -- 'docs/阡陌项目计划书.docx')^
+        for doc in docs/阡陌项目计划书.docx docs/阡陌创新训练项目申请书.docx; do
+          d=$(mktemp -d); git show "$rev:$doc" > "$d/doc.docx"
+          unzip -q -o "$d/doc.docx" 'word/media/*' -d "$d"
+          shasum -a 256 "$d"/word/media/* | cut -d' ' -f1 | sort -u > "$d/embedded"
+          for f in docs/assets/brand/封面.jpg docs/assets/brand/大赛logo大图.png \
+                   docs/assets/brand/大赛logo横版.png; do
+            grep -qxF "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$d/embedded" \
+              && printf '%s ← %s\n' "$doc" "$f"
+          done
+        done
+        # 输出三行，全部指向 docs/阡陌项目计划书.docx
+
+一.8 为什么是 AGPL，以及本次转许可的边界
+----------------------------------------
+
+**为什么选 AGPL 而不是 GPL**：阡陌的产品线②是「连接节点的智能体通信协作
+网络」，最可能被无偿占用的方式恰恰是把它做成托管服务对外提供——GPL-3.0 管
+不着这种用法，AGPL-3.0 §13（Remote Network Interaction）管得着。对一个网络
+型产品，只有 AGPL 才是实质意义上的严格。
+
+**MIT → AGPL 的方向是允许的**：MIT 是宽松许可，可并入 AGPL 作品；反过来不
+成立。因此本仓库对基座那层的改动若要回贡上游（MIT），需要单独授权——基座
+与本仓库同属一位负责人，具备双授权条件，但**不是自动发生的**，逐次决定。
+回贡节奏按 roadmap v2.41 已定为「暂不、个案再议」。
+
+**本次变更不可追溯**：本次变更之前本仓库以 MIT 分发，已据此取得副本者的
+MIT 授权不因本次变更而失效；AGPL 只适用于本次变更之后发布的版本。
+
+**§13 对我们自己同样成立**：AGPL-3.0 §13 要求——用户通过网络与本程序交互时，
+运营方须向该用户提供 Corresponding Source。阡陌的控制台与常驻节点都落在这一
+格，**包括我方自己对外开放的部署**。这是本次转许可唯一新增的持续义务，不是
+只约束别人的条款。
+
+  说明：本仓库早期版本（历史提交 67f6081 及更早）曾采用 Apache License 2.0，
+  该决定已随基座路线变更而作废，见 docs/dev/charter.md §5.5。
+
+================================================================================
+二、基座溯源
+================================================================================
+
+本仓库是 open-claude-code 的下游 fork。基座以零改动快照方式导入本仓库根目录。
+
+  上游项目    open-claude-code（CLI 名 occ）
+  npm 包名    @sweetcornna/open-claude-code
+  导入提交    848ad8c2c8daca9f5aa2410da555553e07700f5d
+              对应版本 v2.38.3 —— 零改动快照导入时的上游提交，历史锚点，
+              不随后续同步变化
+  当前锁定    1128a3919a7f01298a6cbf5c468a839c6cf4ee6a
+              对应版本 v2.46.0 —— 2026-08-17 首次上游同步后的 pin
+  基座快照    base-snapshot/v2.46.0
+              本仓库内的标签，指向一个**无父提交**的基座零改动快照，其树即当前
+              锁定的基座内容。它是「基座内容有多少」的度量基线；此后每次上游
+              同步都照此再打一个 base-snapshot/<版本> 标签
+  上游许可    MIT License
+              Copyright (c) 2026 open-claude-code contributors
+
+完整的导入记录与后续上游同步记录见仓库根目录的 BASE.md。
+
+上游 open-claude-code 的 MIT 许可与版权声明**予以保留**，逐字存于根目录
+`LICENSE.base`：它与基座快照里的 `LICENSE`（即 `base-snapshot/v2.46.0:LICENSE`）
+逐字节相同（1,450 字节），可现核：
+
+    git show base-snapshot/v2.46.0:LICENSE | cmp - LICENSE.base
+
+  注意逐字节相同的对象是**快照里的 `LICENSE`**，不是快照里的 `LICENSE.base`。
+  `LICENSE.base` 这条路径是阡陌新增的，快照里根本没有它——`git cat-file -e
+  base-snapshot/v2.46.0:LICENSE.base` 会报错。按旧文的字面（「该文件与基座快照
+  逐字节相同」）去核，会得出"这句是假的"的错误结论。
+
+本仓库对基座的修改不改变该许可对基座那层的适用。
+
+**成果边界**：基座以零改动快照导入于**本仓库提交 `3380c88`**，其后的提交为阡陌团队
+的工作，**唯一的例外是纯上游同步提交**——那类提交的内容全部来自上游补丁，当前只有
+`d04a79dd` 一笔（2026-08-17），此后每做一次上游同步就会再添一笔。这条例外写在这里而
+不是靠后文更正：下文"工作记录里有一笔不是阡陌工作"给的是同一件事的细节与举证纪律，
+不是另一种说法。举证命令：
+
+  工作面            git diff base-snapshot/v2.46.0..HEAD
+  工作记录          git log 3380c88..HEAD
+  当前基座贡献边界  git show --stat base-snapshot/v2.46.0
+
+另加导入前的两个立项提交 67f6081、74f7a22。
+
+**工作面基线的一次向下修正**：本文此前把工作面写作 `git diff 3380c88..HEAD`。那在
+2026-08-17 的首次上游同步（v2.38.3 → v2.46.0）之后已经不成立——上游那 6 万行随
+该次同步进入了本仓库历史，再拿导入提交作度量基线，就会把上游内容算成我方工作。
+
+**下面两个数锚在提交 `c9c74627` 上，不锚日期**——本仓库每加一笔提交它们都会变
+大，所以它们是某一次测量的记录，不是可以引用的常数。在 `c9c74627` 上实测：
+
+    git diff --shortstat 3380c88..c9c74627
+      → 1599 files changed, 292973 insertions(+), 39268 deletions(-)
+    git diff --shortstat base-snapshot/v2.46.0..c9c74627
+      → 1048 files changed, 234068 insertions(+), 31937 deletions(-)
+
+**要报数一律现跑**：把 `c9c74627` 换成 `HEAD` 即可。
+
+**连两者之差也不是常量，这一点要说破。**它在含 `c9c74627` 在内的这一批五笔提交上
+恒为 58,905 行插入，看着像个结构量、因而稳定；但在 `5c96d0b8`（2026-08-17 当天最后
+一笔）上实测是 59,784——把
+`git diff --shortstat base-snapshot/v2.46.0..5c96d0b8` 从
+`git diff --shortstat 3380c88..5c96d0b8` 里减掉即得。差额会随时间缩小，因为其后的
+阡陌工作不断改动或删除上游新增的行，两条基线的分歧量本身在变。**这里没有任何一个
+数是稳的，稳的只有命令。**
+
+那部分差额来自两个基线之间的那次上游同步——它不是阡陌的工作。**但差额不等于那次
+同步本身的行数**：同步落地的那一笔实测是 650 文件 / +60,362 / −7,431
+（`git show --shortstat d04a79dd`）。两个数不相等是正常的——同步之后的阡陌工作又
+改动或删除了上游新增的一部分行，所以「两次测量之差」与「那次同步的行数」本来就
+不是同一个量，不该指望它们对得上。
+
+  **`d04a79dd` 这个数与 BASE.md 记的不是同一个量，两处都对、不构成矛盾**：
+  BASE.md（以及 charter.md、positioning-m0.md、upstream-sync-drill.md）记的是
+  **上游补丁区间** `848ad8c2..1128a391` 的 650 文件 / +60,363 / −7,417；这里给的
+  是**那次同步落地到本仓库的那一笔提交**的 650 文件 / +60,362 / −7,431。那次同步
+  有一块冲突文件取了上游侧原文，落地内容与补丁内容因此略有出入。
+
+**这处错误的方向是把我方工作量夸大，所以必须改**——报大数字比报小数字更伤。口径
+依据 docs/dev/charter.md §5.5「v2.13 更新 · 首次上游同步之后，工作面口径改用基座
+快照标签」。
+
+**工作面这个数必须连同构成一起报，不许只报总数**——依据
+docs/dev/positioning-m0.md §1.4 禁用表述清单：只报总行数而不给分解属禁用表述。
+`c9c74627` 上那 234,068 行插入里，至少有三项一眼就不是我方撰写的产出：
+`docs/dev/sbom-m0.json` 的 31,776 行由 `bun run sbom` 生成、根 `LICENSE` 的
+661 行是 FSF 的 AGPL-3.0 许可正文、`LICENSE.base` 的 29 行是上游的 MIT 许可正
+文——合计 32,466 行，约占 14%。完整的分解口径与「只能报一个数时报哪个」的规矩见
+docs/dev/positioning-m0.md §3.1；现跑命令是
+`git diff --numstat base-snapshot/v2.46.0..HEAD | sort -rn | head`。
+
+**工作记录里有一笔不是阡陌工作**：`git log 3380c88..HEAD` 中的 `d04a79dd`
+（2026-08-17，"三方应用上游 open-claude-code v2.46.0"）改动内容全部来自上游补丁，
+把工作记录作为举证材料时须单独声明这一笔。
+
+**导入提交 `3380c88` 的地位不变**：它仍是「阡陌工作从哪里开始」的历史起点，只是
+不再兼任「基座内容有多少」的度量基线——后者已由标签 `base-snapshot/v2.46.0` 承担。
+
+  说明：本仓库经零改动快照导入、**不含上游 git 历史**，故举证基线是本仓库内的
+  对象（导入提交 3380c88 与标签 base-snapshot/v2.46.0），而不是上游 pin 提交
+  848ad8c2 —— 后者是**上游仓库**的 SHA，在本仓库不是有效的 git 对象。上游溯源以
+  BASE.md 的记录与上游仓库比对为准，不经本仓库 git 对象。（依据
+  docs/dev/charter.md §5.5「举证命令勘误」v2.4 与「v2.13 更新」）
+
+================================================================================
+三、关于基座的性质（如实声明）
+================================================================================
+
+上游项目 open-claude-code 自述其为 Anthropic Claude Code 的"社区版"，以逆向
+复原（reverse-engineered restoration）的代码为基座，由社区维护和优化的衍生
+版本（见其 README）。
+
+其 MIT 许可是上游项目作者对其自身还原与原创工作的授权。本声明不就该授权与被
+还原表达之间的关系作出任何法律判断。
+
+================================================================================
+四、Anthropic 商标与品牌注意事项
+================================================================================
+
+"Claude"、"Claude Code" 与 "Anthropic" 是 Anthropic, PBC 的商标。
+
+  * 本项目与 Anthropic, PBC **无关联、未获其背书、未获其赞助**。
+  * 本项目不主张对上述商标的任何权利，亦不以 Anthropic 的名义或暗示与其存在
+    授权、合作或背书关系。
+
+**关于代码中保留的 Anthropic 相关标识**：基座出于协议兼容性，刻意保留了若干
+包含上述名称的字符串——它们承载协议而非品牌，改动会破坏功能。已知包括：
+
+  * 系统提示词中的 "You are Claude Code, Anthropic's official CLI for Claude"
+    前缀（提示缓存与行为调优按该文本命中）；
+  * "claude-code/<version>" User-Agent；
+  * OpenTelemetry service.name "claude-code"；
+  * CLAUDE.md / CLAUDE.local.md / AGENTS.md 记忆文件名（跨工具生态约定）；
+  * 子进程环境变量 CLAUDECODE=1（跨工具提示协议）。
+
+  这些标识的技术性保留**不构成**任何关联性主张。
+
+================================================================================
+五、第三方组件
+================================================================================
+
+本仓库包含基座及其依赖树引入的第三方组件，各自适用其原有许可。
+
+**依赖与许可清单（SBOM）**：机器可读清单见 docs/dev/sbom-m0.json，人读摘要见
+docs/dev/sbom-m0.md。两者均由 `bun run sbom` 生成，可随时复现核对。
+
+**随仓库分发的预编译原生二进制**（不来自 npm 依赖树）：
+
+  * `vendor/audio-capture/` —— 六个平台三元组（arm64/x64 × darwin/linux/win32）的
+    `audio-capture.node`（N-API 原生插件），随基座快照一并导入，并由 `build.ts` /
+    `scripts/post-build.ts` 复制进 `dist/vendor/` 随产物分发。**源码此前完全缺失
+    这件事已经解决**：`packages/audio-capture-napi/native/`（Rust + napi-rs 2.16 /
+    cpal 0.15.3）已从零重写入库（clean-room，未反编译原二进制），其 `.rs` 与
+    `.toml` 源文件都带 `SPDX-License-Identifier: AGPL-3.0-or-later` 文件头，实现了
+    `packages/audio-capture-napi/src/index.ts` 约定的全部八个导出函数
+    （`startRecording` / `stopRecording` / `isRecording` / `startPlayback` /
+    `writePlaybackData` / `stopPlayback` / `isPlaying` /
+    `microphoneAuthorizationStatus`）。该 crate 需要 Rust ≥ 1.85（`coreaudio-sys`
+    要求 edition2024），已用 crate 内 `rust-toolchain.toml` 钉住 1.85.0。构建与
+    验证方式见 docs/dev/audio-capture-native.md。
+
+    **六个 triple 的替换进度（如实列出，6/6 已完成；证据等级不同——`arm64-win32`
+    只有构建与结构性核对，没有运行时证据）**：
+      - `arm64-darwin` —— **已替换**：从零构建成功，`clippy --all-targets
+        -- -D warnings` 与单元测试通过；本机 Bun 真机验证录音（16 kHz / 16-bit LE /
+        mono，50 ms 分块，三轮一致，15584–15600 Hz）与播放（起停/幂等/重启），
+        八个导出齐全，`microphoneAuthorizationStatus()` 返回 3，与原厂二进制及
+        独立 Swift 探针一致。
+      - `x64-darwin` —— **已替换**：通过 **Rosetta 2 + 真实 x86_64 Node v26.3.0**
+        与原厂二进制**并排加载对比**，八个导出齐全、`microphoneAuthorizationStatus()`
+        返回 3、状态位一致。
+      - `x64-linux` —— **已替换**：通过 **Docker `linux/amd64` + `node:22-slim`**
+        （装 `libasound2`）与原厂二进制并排加载对比，逐项一致。
+      - `arm64-linux` —— **已替换**：通过 **Docker `linux/arm64` 原生容器**与原厂
+        二进制并排加载对比，逐项一致。
+      - `x64-win32` —— **已替换**：由手动触发的工作流
+        `.github/workflows/build-audio-capture-windows.yml`（只配 `workflow_dispatch`，
+        `windows-latest`，目标 `x86_64-pc-windows-msvc`）构建，并在同一 runner 上用
+        Node 真 `require()` 加载——八个导出均为函数，`microphoneAuthorizationStatus()`
+        返回 3（落在 0..=3 的合法区间内）。
+      - `arm64-win32` —— **已替换，但没有运行时证据**：由同一工作流的
+        `aarch64-pc-windows-msvc` 矩阵项构建，`cargo build --release` 成功、
+        `cargo clippy --release -- -D warnings` 干净。**该产物从未在任何机器上被加载
+        或执行过**——`windows-latest` runner 是 x86_64，结构上加载不了 aarch64 的
+        DLL；工作流对此不假装通过，而是打印一行显式跳过理由。除构建与静态检查外，
+        它取得的只有结构性核对（PE 机器类型 `0xaa64`、`napi_register_module_v1`
+        存在、八个导出名字符串齐全、依赖面与原厂产物零差异）。**在真实 Windows on
+        ARM 机器上的加载验证未做，且不排期**——负责人 2026-08-30 决定不做这一项
+        （本项目没有 Windows on ARM 机器），该验证无限期挂起，见
+        docs/dev/charter.md v2.17 ④。这是验证缺口而非许可缺口——它与其余五个同出
+        一份源码。
+
+    **关于 `--allow-unverified-install`（避免被误读为"硬装未验证产物"）——
+    这一段只讲三个跨架构 darwin/linux 产物，两个 Windows 产物见紧随其后的一段**：
+    `scripts/build-audio-capture.sh` 的自动校验闸门只能验证"本机能否原生
+    `require()` 加载"，`x64-darwin` / `arm64-linux` / `x64-linux` 三个跨架构产物
+    因此走的是该标志，但**这不等于未经验证**——它们是先在容器（Linux 两项）或
+    Rosetta 2（`x64-darwin`）**目标架构上真实加载**、与原厂二进制并排对比逐项一致
+    之后，才手工确认安装的，与"完全没测过就装"是两回事。
+
+    **两个 Windows 产物根本没走这个脚本，所以上面那句话不覆盖它们**：
+    `scripts/build-audio-capture.sh --install` 复制的是 cargo **刚在本机构建出来**
+    的那个路径（`built_path`），装不了从别处下载来的文件。实际做法是：用
+    `gh run download` 从工作流 run `33292271322` 取回两个 artifact，核对 PE 机器
+    类型、`napi_register_module_v1`、八个导出名与依赖面之后，**直接复制进**
+    `vendor/audio-capture/{x64-win32,arm64-win32}/audio-capture.node`；原产物先做了
+    备份，另有 `git show 5459375f:…` 这条取回路径（见下）。**证据等级在这里分叉**：
+      - `x64-win32` —— **装入前已有运行时验证**：构建它的同一个 runner 在同一次
+        运行里用 Node 真 `require()` 加载过它，八个导出均为函数、
+        `microphoneAuthorizationStatus()` 返回 3。
+      - `arm64-win32` —— **它是六个里唯一一个"装进去时确实没有任何运行时验证"
+        字面属实的**。紧邻上面替另外三个跨架构产物作的辩护（"这不等于未经验证"）
+        **不适用于它**，两件事不能合着读：那三个是先在目标架构上真加载过才装的，
+        而这一个至今没有在任何机器上被加载或执行过。
+
+    **一条运行时依赖等价性证据（回答"换成自建产物会不会让 Linux 用户跑不起来"）**：
+    对 Linux 产物用 `readelf -d` 比较 `NEEDED` 段——原厂二进制依赖
+    `libasound.so.2` / `libpthread.so.0` / `libc.so.6` / `libdl.so.2` /
+    `ld-linux-x86-64.so.2`；自建产物依赖以上全部，**外加** `libgcc_s.so.1` /
+    `libm.so.6`。**结论：ALSA 这个硬依赖原厂本来就有，不是自建产物引入的**；
+    多出的两个在任何 glibc 系统上必然存在。运行时依赖面没有实质变化。
+
+    **Windows 产物的同一条证据，而且是零差异**：读 PE **导入表**逐项比对——原厂与
+    自建产物的**装载期导入完全相同，共 7 项**：`advapi32.dll` /
+    `api-ms-win-core-synch-l1-2-0.dll` / `bcryptprimitives.dll` / `kernel32.dll` /
+    `ntdll.dll` / `ole32.dll` / `oleaut32.dll`；**延迟导入 0 项**。新旧 × x64/arm64
+    四个文件逐项一致。可复现命令（两个架构要用不同的 objdump）：
+    `x86_64-w64-mingw32-objdump -p <x64 文件> | grep 'DLL Name:'`、
+    `objdump -p <arm64 文件> | grep 'DLL Name:'`。
+    **`dbghelp.dll` 不算在内**：它不在任何一个产物的导入表里——那是 Rust std 的
+    backtrace 在 panic 时才用 `LoadLibrary` 现加载的符号化目标，只作为字符串存在于
+    二进制中。早先用 `strings -a <file> | grep -oiE '[A-Za-z0-9_.-]+\.dll'` 提取时
+    把它误算成了第 8 项：`strings` 是启发式，只能过度包含，分不出装载期导入、延迟
+    导入与碰巧出现的字符串。**逐项相等这个结论没变，变的是方法与数字（8 → 7）。**
+    若手边没有 objdump 而仍用 `strings` 法，除 `dbghelp.dll` 外还要排除 crate 自身的
+    模块名——自建产物是 `audio_capture.dll`、原厂产物是 `audio_capture_napi.dll`
+    （都是重命名为 `.node` 之前的构建产物原名，不是外部依赖，两边名字不同、都要排）。
+    **这条证据比上面 Linux 那条更强**——那边自建产物多出两个库，Windows 这边一个都
+    不多；改用导入表之后两边的方法也对等了（`readelf -d` 的 `NEEDED` 与 PE 导入表
+    都是权威读法，不是字符串扫描）。
+    它不是一次就成的：第一版自建产物额外引入了 `vcruntime140.dll`，那东西既不随 Windows 出厂、
+    也不随 Node.js 安装程序分发，目标机没装 Visual C++ 可再发行组件包时 `require()`
+    会抛错——而 `packages/audio-capture-napi/src/index.ts` 的装载层会吞掉这个错误
+    静默降级，故障表现是语音模式无声消失、不留线索。改为按 target（而不是全局）
+    打开 `-C target-feature=+crt-static` 后消除，理由与判据见
+    docs/dev/audio-capture-native.md §3.2。
+
+    **因此当前状态是**：`vendor/audio-capture/` 六个二进制**全部由本仓库自有源码
+    构建**，随基座快照带入的原厂产物已全部被替换，仓库内不再有来源不明、许可未定
+    的二进制。**原厂产物的溯源记录保留在此备查**：上游仓库
+    （https://github.com/sweetcornna/open-claude-code）同样只有这六个预编译产物，
+    未随附源码、构建脚本或 LICENSE 文件（2026-08-15 核）；二进制符号显示原厂产物
+    由 Rust + napi-rs 构建（静态链接 napi 2.16.17、cpal 0.15.3，以及各平台的
+    coreaudio-rs 0.11.3 / alsa 0.9.1 / windows 0.54.0）。被替换掉的两个 Windows
+    原产物仍可由 `git show 5459375f:vendor/audio-capture/<平台>/audio-capture.node`
+    取回（sha256 x64 `2a8267f4…`、arm64 `98386089…`）。
+
+    **它与本仓库转 AGPL 的关系（如实记录，不粉饰）**：负责人已决定把这六个二进制
+    一并纳入 copyleft 并补齐源码——源码已提供，**六个 triple 现已全部换成由该源码
+    构建的产物**，"标了 AGPL 却给不出源码"这个根本障碍就此消失。原两条收口路径中，
+    负责人选定的是第一条（补源码并标 AGPL），该工作现已执行完毕。**尚存的是一处
+    验证缺口，不是许可缺口**：`arm64-win32` 没有运行时证据，而在真实 Windows on
+    ARM 机器上的加载验证**未做、且按章程 v2.17 ④ 不排期**；它的许可归属没有待定
+    项——与其余五个同出一份仓库内的 AGPL 源码。跟踪见
+    docs/dev/license-chain-m0.md 的 D-9（已处置）。
+
+  * `src/utils/vendor/ripgrep/` —— ripgrep 可执行文件，**不入库**，由
+    `scripts/postinstall.cjs` 在安装时从 microsoft/ripgrep-prebuilt v15.0.1 下载并
+    对每个档案做硬编码 SHA-256 校验。构建工程 microsoft/ripgrep-prebuilt 以 MIT
+    发布；ripgrep 本体的许可以上游 BurntSushi/ripgrep 项目的许可文件为准。
+
+**随仓库分发的第三方标识**（不来自依赖树，**不随本仓库任何许可授出**）：
+
+  * `docs/assets/brand/大赛logo大图.png`、`docs/assets/brand/大赛logo横版.png` 与
+    `docs/assets/brand/封面.jpg` —— **中国国际大学生创新大赛的官方标识**。前两个
+    是标识本身（大图版与横版），第三个是申报封面，**该标识被合成进了画面**，不是
+    删掉一个文件就能择出来的。三个都由立项初始化提交 `67f6081` 一笔入库、此后未再
+    改动，不进构建、不进 `dist/`，只随仓库源码分发。
+
+    **证据等级：仓库内零授权记录。**这不是"授权文件放在别处"，而是本仓库里检索不
+    到任何来源、授权或使用许可的记录——`docs/assets/brand/` 目录下只有六个资产文件
+    本身，没有 LICENSE、README 或来源说明，这三个文件的全部 git 历史也只有那一笔
+    导入。两条可核命令：
+
+        # 三个文件的全部历史：只有立项初始化那一笔
+        git -c core.quotePath=false log --oneline \
+            -- 'docs/assets/brand/大赛logo大图.png' \
+               'docs/assets/brand/大赛logo横版.png' \
+               'docs/assets/brand/封面.jpg'
+        # 目录内容：只有资产本身，没有任何随附的授权或来源文件
+        git -c core.quotePath=false ls-files docs/assets/brand
+
+    **口径**：它们**仅为申报材料原样保留**，既不随本仓库的 AGPL-3.0-or-later、也
+    不随基座那层的 MIT 授出；**第三方不得依据本仓库的许可复用这三个文件**，需要使
+    用该标识的应向该赛事主办方取得授权。本仓库不主张对该标识的任何权利。它与另外
+    27 个非代码资产的分类见上文"一、许可"的「一.7 非代码资产的许可」。
+
+**开发期专有授权依赖的披露**：根 `devDependencies` 中的
+`@anthropic-ai/claude-agent-sdk`（及其平台原生包）**不是开源许可**——其包内
+LICENSE.md 全文为「© Anthropic PBC. All rights reserved.」，属专有授权。本仓库对它
+的引用仅有一处 `import type`（纯类型，编译期擦除）与注释；构建产物 `dist/` 中零命
+中，**不随本项目产物分发**，因此分发本项目产物不构成对该 SDK 的再分发。其许可条款
+以其包内 LICENSE 为准。此处如实披露依赖构成，**不构成**与 Anthropic, PBC 的任何
+关联、授权或背书关系（见上文「四、Anthropic 商标与品牌注意事项」）。
+
+**依据第三方开源项目整理的兼容规则**：阡陌自有的模型调用兼容层（M1 P18.5）里有
+若干规则表——错误文案片段、错误码、主机名、模型名前缀、数值阈值，以及「何时去掉某个
+请求字段再发一次」这类判定规则——依据 NousResearch/hermes-agent
+（https://github.com/NousResearch/hermes-agent ，MIT 许可，Copyright (c) 2025 Nous
+Research）整理。只取规则事实，代码是阡陌自己写的；hermes-agent 不是本项目的依赖，
+它的源代码不在本仓库里，也不随产物分发。
+
+  * **出处**：取于提交 `f9b29c49b6`（负责人派生仓库上的提交；被引用的文件与上游
+    NousResearch/hermes-agent 提交 `8911e2e0ed` 逐字节相同），取用日期 2026-10-03。
+    每个相关文件的文件头逐条写明所依据的文件与行号。
+  * **涉及的文件**（文件本身以 AGPL-3.0-or-later 发布，见各自文件头）：
+      - `src/services/qianmo/modelCompat/` 下的 `wireHosts.ts`、`outputTokenParam.ts`、
+        `outputTokenDefault.ts`、`overflowText.ts`、`outputCap.ts`、`errorText.ts`、
+        `samplingParams.ts`、`unsupportedParam.ts`；
+      - `packages/@ant/model-provider/src/shared/qianmo/toolCallDeltas.ts`。
+  * **许可声明**：出于审慎，依 MIT 许可「在全部副本或实质部分中保留版权声明与许可
+    声明」的条件，原样保留 hermes-agent 的版权声明与许可声明如下：
+
+    MIT License
+
+    Copyright (c) 2025 Nous Research
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.
+
+
+================================================================================
+================================================================================
+ENGLISH
+================================================================================
+================================================================================
+
+1. LICENSE
+--------------------------------------------------------------------------------
+
+1.1 The two layers and the governing test
+----------------------------------------
+
+This is a **dual-licensed repository**. The two layers carry different
+licenses, and the boundary is the provenance boundary itself:
+
+  * **Qianmo's own code -- GNU AGPL-3.0-or-later** (`LICENSE` at the root).
+    This covers the `@qianmo/*` workspace packages under `packages/`, the
+    residency modifications to the base runtime, the demo and acceptance
+    suites under `demo/`, and documentation written by the Qianmo AgentNest
+    Team (`docs/dev/` and others). The test is the **file header**: a file
+    carrying both `SPDX-License-Identifier: AGPL-3.0-or-later` and
+    `Copyright 2026 Qianmo AgentNest Team` belongs to this layer -- 647 files,
+    anchored at commit `d08b16c3`, which added `docs/dev/spdx-backfill-retro.md`.
+    The count grows whenever a file with that header is
+    added, so the command below, not this number, is what to rely on.
+
+1.2 The 83 files that the test does not cover
+----------------------------------------
+
+    **This file-header test does not cover every file of Qianmo's own code.**
+    As of 2026-09-26, **83 files are absent from the base snapshot tree and
+    carry neither line** (on 2026-08-30 there were 87; the difference is the 4
+    application documents removed from the repository on 2026-09-26 -- see
+    Class C in section 1.7) -- that is the definition the command below
+    applies, a side of a path-based test, **not an assertion of ownership**.
+    `LICENSE.base` is among the 83 and is not Qianmo's own: the path was added
+    by Qianmo and is absent from the snapshot, while its contents are the
+    upstream MIT license text kept verbatim. Its presence on this side marks
+    where the path test stops rather than anything about title; that limit is
+    set out later in this section, under "What that test cannot answer".
+
+    Of those 83, 79 group by file format, and within that group there are two
+    reasons.
+    Some are **binary or pure-data formats with no comment syntax to begin
+    with**: 27 `.jpg`, 3 `.png`, and 28 `.json` (the JSON grammar has no
+    comments; 20 of those 28 are `package.json`). The others
+    **could carry a comment, but they are generated files and tooling
+    configuration rather than source, so a header there would either be
+    overwritten or mean nothing**: 20 `tsconfig.json` (TypeScript parses these
+    as JSONC and accepts `//`) and
+    `packages/audio-capture-napi/native/Cargo.lock` (TOML, which does support
+    `#` -- its own first two lines are comments written by Cargo, the second of
+    them reading "It is not intended for manual editing", so a hand-added line
+    is wiped on the next regeneration). **The remaining 4 could carry a comment
+    and are not generated either, and deliberately do not**, each for a
+    different reason:
+
+      - `BASE.md` -- the single source of truth for base provenance. A
+        repository rule admits only two kinds of event, an import and an
+        upstream synchronization, as grounds for editing it; a feature commit
+        must never touch it.
+      - `LICENSE.base` -- it holds the upstream MIT license text kept
+        verbatim, and adding an AGPL line to it would be a **misstatement**.
+      - `NOTICE` -- this file itself, the license notice proper. The
+        `awk -F: '$2<=5'` restriction to the first five lines in section 1.5
+        exists for exactly this: it keeps the identifier quoted in this file's
+        body from counting itself.
+      - `packages/audio-capture-napi/native/.gitignore` -- tooling
+        configuration rather than source, on the same footing as the
+        `Cargo.lock` beside it: a license line there would mean nothing. It
+        belongs to neither of the two format groups above, hence its own entry
+        here.
+
+    What this file used to say -- "the rest are source files and documents
+    whose headers are still to be added; a separate set of commits is doing
+    that" -- is out of date: that work was completed on 2026-08-30 (66 files),
+    and the 83 above are what remains after it, less the 4 application
+    documents removed on 2026-09-26. The number moves as work proceeds, so
+    compute the list (no number is hard-coded):
+
+        # files that are Qianmo's own -- i.e. absent from the base snapshot
+        # tree -- yet carry no header, grouped by extension and named path;
+        # also reports header-bearing, Qianmo-side, and snapshot-tree totals
+        bun run check:license-headers --report
+
+    The old form was an inline `comm -23 <(git ls-files) <(git ls-tree …)`
+    pipeline; it has been replaced by a reference to the gate at
+    `scripts/check-license-headers.ts`, because the same fact should have one
+    source and a hand-copied second implementation will drift. **The
+    non-ASCII-filename trap remains, but the gate now handles it internally**:
+    by default `git ls-files` double-quotes non-ASCII paths and writes octal
+    escapes, so handing such output to `head` fails to resolve the file and
+    silently undercounts it. This repository currently has 29 such names
+    (`git -c core.quotePath=false ls-files | LC_ALL=C grep -c '[^ -~]'`
+    verifies the count).
+
+    **The gate reports all `.json` files as one class, while the explanation
+    above divides them between two reasons; these are two views of the same
+    files**: 28 files for which "JSON has no comment syntax" plus 20
+    `tsconfig.json` files that are tooling configuration rather than source
+    make the gate's `.json` total of 48. The gate needs only to know that they
+    are exempt; the split above records **why** they are exempt.
+
+1.3 The file header works in one direction only
+----------------------------------------
+
+    The file header holds in one direction only, and the two directions are
+    shaped very differently:
+
+      - **carries the header => belongs to the AGPL layer** -- holds, and it
+        has been checked in full against the authoritative test (whether the
+        file exists in the unmodified `base-snapshot/v2.46.0` snapshot): of
+        the 647 files carrying the header, **not one** is a counterexample
+        (measured at commit `d08b16c3`, which added `docs/dev/spdx-backfill-retro.md`). That half of the test is therefore an
+        observation rather than a stipulation, and the two tests agree
+        completely in this direction. It is falsifiable all the same --
+        someone putting the header on a base file by mistake would produce a
+        counterexample -- which makes it more useful as a **check** than as an
+        assertion: the command below is the check for "has anyone stuck an
+        AGPL header onto a base file", and it passes only when it reports
+        `基座文件误贴 0` (0 base files mis-stamped).
+
+            bun run check:license-headers
+
+        This is no longer an inline pipeline either: the same gate as the
+        reporting command above checks all three directions in one run. It
+        first prints an **environment line** (the test's snapshot tag, the
+        snapshot-tree file count, the tracked-file count, and the count on
+        Qianmo's side), then a **determination line**. The figures on the
+        environment line move whenever files are added or removed, so they are
+        deliberately not copied here -- run the gate to see them. The measured
+        determination line follows; the gate output is in Chinese, and all
+        three values must be zero:
+
+            [license-headers] OK：阡陌自有缺头 0（另有 83 个在豁免表内），基座文件误贴 0，豁免文件被盖章 0
+
+        **The gate checks three things, which are not the same as the two
+        inference directions above**: (1) a **missing header** -- a Qianmo-side
+        file not in the exemption table whose first five lines lack either
+        required line; (2) a **mis-stamped base file** -- an SPDX line in the
+        first five lines of a file that is present in the base snapshot, the
+        counterexample discussed here; and (3) a **stamped exempt file**. The
+        four files named above, together with `Cargo.lock` (five named
+        exemptions), deliberately carry no header rather than merely being
+        unable to carry one, so the exemption is two-way: a header is neither
+        required nor permitted. Stamping `LICENSE.base` with an AGPL line is
+        exactly the **misstatement** described above. **One exception**:
+        `NOTICE` itself is forbidden an SPDX line but not a copyright line --
+        its line 2 `Copyright 2026 Qianmo AgentNest Team` is the copyright
+        notice that belongs on the licensing notice itself.
+
+        **One more distinction prevents two counts from being conflated**:
+        the gate calls a file "header-bearing" only when **both lines** appear
+        within its first five lines, whereas the `git grep … | awk -F:
+        '$2<=5'` command in section 1.5 below counts the SPDX line alone. They
+        currently give the same result (there are no files missing the
+        copyright line), but their definitions differ and would diverge if a
+        file carried only the SPDX line; run each to compare them.
+
+      - **no file header, therefore the base MIT layer** -- **does not hold**.
+        The reason is no longer that a batch of headers is outstanding, but
+        the 83 header-less files above that are absent from the snapshot tree:
+        **82 of them are counterexamples**. **The remaining one is
+        `LICENSE.base`, and it is not a counterexample** -- it carries no
+        header, and its contents are the upstream MIT text verbatim, so by
+        content it does sit in the MIT layer and the inference happens to land
+        correctly on it. That is a coincidence rather than the test working:
+        both tests read the path, not the contents (see the counting sentence
+        above and the "What that test cannot answer" paragraph later in this
+        section). It is also the only such case among the 83 -- comparing
+        contents file by file, it is the one that is byte-for-byte identical
+        to a file in the snapshot. There is a second and finer failure too:
+        the 180 modified base files described in the next bullet **do** belong
+        to the base layer, yet the Qianmo changes inside them do not become
+        MIT on that account -- layering by provenance is not the same as
+        licensing by line. (What license those files are distributed under is
+        stated in the next bullet.)
+
+1.4 What that test cannot answer
+----------------------------------------
+
+    The authoritative test is whether the file exists in the `base-snapshot/*`
+    snapshot; see section 2 below. **What that test cannot answer is set out
+    here as well, so that it is not taken for a licensing conclusion**: it
+    answers "was this file imported along with the base project", **not**
+    "under what license is this file granted". `LICENSE.base` is a standing
+    counterexample -- the path was added by Qianmo and is absent from the
+    snapshot, so the authoritative test places it in Qianmo's AGPL layer, while
+    its contents are the upstream MIT license text verbatim; **neither test
+    gives the right answer for that file**, which is exactly why it is one of
+    the four "deliberately no header" entries above. A second mismatch has to
+    be stated as plainly: the same test places 27 `.jpg` and 3 `.png`
+    **non-code assets** in Qianmo's layer, and **AGPL-3.0 is a software
+    license**. The test does not determine the licenses for those works; they
+    are instead classified by use: project-made works are granted under
+    CC BY-SA 4.0, the third-party mark is not granted, and the application
+    documents are All rights reserved (removed from the current version on
+    2026-09-26). Section 1.7 below gives the
+    complete inventory, the basis for each class, and the disclosure for one
+    AI-generated asset.
+
+1.5 The base MIT layer and its 180 modified files
+----------------------------------------
+
+  * **Code imported from the base project -- MIT License** (`LICENSE.base`,
+    the upstream text kept verbatim). Base files carry **no SPDX header**,
+    which is the machine-checkable test between the two layers:
+
+        # the files in the AGPL layer -- this command reads your current
+        # tree, not a specific commit; at commit `d08b16c3` (which added
+        # `docs/dev/spdx-backfill-retro.md`) it lists 647 of them
+        # (restricted to the file header, so documents that merely quote
+        # the identifier -- this file among them -- are not counted)
+        git grep -n "SPDX-License-Identifier: AGPL-3.0-or-later" \
+          | awk -F: '$2<=5' | cut -d: -f1 | sort -u
+
+    **Base files that Qianmo has modified still carry no SPDX header. That is
+    deliberate, not an omission.** As of 2026-08-30, 180 base files are
+    present in the snapshot with content that has since changed, and 0 of them
+    carry an AGPL file header (a further 135 files in the snapshot have been
+    deleted. **The 180 + 135 = 315 is the number of entries in this diff that
+    land on snapshot paths, not the size of the snapshot**: that tree holds
+    4,171 files -- check with `git ls-tree -r --name-only
+    base-snapshot/v2.46.0 | wc -l` -- and the other 3,856 base files are
+    untouched to this day):
+
+        # base files that have been modified -- in the snapshot, content
+        # changed since
+        git diff --name-only --diff-filter=M base-snapshot/v2.46.0..HEAD
+        # of those, the ones carrying an AGPL file header (expected: none)
+        git -c core.quotePath=false diff --name-only --diff-filter=M \
+            base-snapshot/v2.46.0..HEAD \
+        | while IFS= read -r f; do
+            head -5 "$f" | grep -qa 'SPDX-License-Identifier: AGPL-3.0-or-later' \
+              && printf '%s\n' "$f"
+          done
+
+    **What license those 180 files are distributed under is stated here, not
+    left to be worked out by subtracting one bullet from the other.** The file
+    header -- and the presence or absence of one -- marks the **provenance
+    layer**: it answers "was this file imported along with the base project",
+    **not** "which lines inside it came from upstream", and it certainly does
+    **not** mean "this file is granted under MIT". **A file-level provenance
+    classification cannot answer a line-level attribution question** -- for
+    that, read the line history (`git diff base-snapshot/v2.46.0..HEAD --
+    <file>`). The root `LICENSE` is the extreme case that makes the
+    distinction concrete: the path is present in the snapshot (`git cat-file
+    -e base-snapshot/v2.46.0:LICENSE` succeeds), so by the test it is of base
+    provenance; yet its content today is 29 lines of MIT text wholly replaced
+    by 661 lines of AGPL text (`git diff --numstat
+    base-snapshot/v2.46.0..HEAD -- LICENSE` reports the two columns `661` and
+    `29`, which are exactly the whole line counts of the two versions -- `wc -l
+    LICENSE` and `git show base-snapshot/v2.46.0:LICENSE | wc -l` -- so not one
+    line is context), and **not a single line in the file came from
+    upstream**. A file that came from the base project and was afterwards
+    modified by Qianmo is distributed as a **combined work** -- **so long as
+    upstream expression still remains inside it**: the upstream portion
+    remains under MIT (which is precisely why `LICENSE.base` is kept
+    verbatim -- that is how the MIT retention obligation is discharged), while
+    the portion Qianmo added is an AGPL work. **But "combined work" cannot be
+    asserted of all 180 of these files**: a file whose upstream content was
+    replaced wholesale is not a combined work, because no upstream expression
+    is left inside it to combine with. The root `LICENSE` just argued through
+    is one of the 180, and not one line of upstream content remains in it;
+    **but "no upstream expression" and "no one else's expression" are two
+    different things and must not be run together as one**: those 661 lines are
+    the FSF's AGPL-3.0 license text, not one line of which Qianmo wrote --
+    `sed -n '1,6p' LICENSE` shows lines 4-6 reading "Copyright (C) 2007 Free
+    Software Foundation, Inc." and "changing it is not allowed". **So the root
+    `LICENSE` is neither a combined work nor an AGPL work of Qianmo's; it is
+    that license text itself**: copyright FSF, permitted to be copied verbatim
+    and expressly not to be modified. This is the same reasoning this file
+    already applies to `LICENSE.base` above -- a verbatim copy of a license
+    text is not something to lay another license notice over -- and no separate
+    doctrine is introduced for it. **The test used just above (both numstat
+    columns equal to the whole line counts of the two versions) does not reach
+    all 180 of them**: it reads the two line-count columns that
+    `git diff --numstat` prints, and 7 of the 180 have no line counts at all
+    -- `.gitattributes` marks `*.node` as `binary` and `bun.lock` as `-diff`,
+    so numstat prints `-` in both columns for them:
+
+        # the entries that test cannot reach (7: the six .node files and
+        # bun.lock)
+        git diff --numstat --diff-filter=M base-snapshot/v2.46.0..HEAD \
+          | awk '$1=="-"{print $3}'
+        # why they carry no line counts
+        grep -nE '\.node|bun\.lock' .gitattributes
+
+    So what that test actually screened is the remaining 173 text entries, and
+    the finding is confined to them: `LICENSE` is at present the only
+    wholesale replacement among them, and it is precisely a license text;
+    every other one still holds lines carried over from the snapshot. **The 7
+    have to be stated separately, and six of them -- the `.node` files -- are
+    wholesale replacements as well**: none of them is the same blob as its
+    namesake in the snapshot.
+
+        # none of the six .node files is the same blob as in the snapshot
+        for t in arm64-darwin x64-darwin arm64-linux x64-linux \
+                 x64-win32 arm64-win32; do
+          p="vendor/audio-capture/$t/audio-capture.node"
+          git rev-parse "base-snapshot/v2.46.0:$p" "HEAD:$p" | tr '\n' ' '
+          echo "$t"
+        done
+
+    No upstream expression is left inside them to combine with, so **the
+    "combined work" reason does not hold for them**; the grounds for which
+    layer they sit in are in the **next bullet** (the one beginning "The
+    `vendor/audio-capture/` exception no longer exists") -- those six `.node`
+    files have been rebuilt from this repository's own AGPL source, are build
+    artifacts of that source, and are distributed with it under the same
+    license; no separate doctrine is introduced here. The remaining entry,
+    `bun.lock`, is not a wholesale replacement: it is a generated dependency
+    lockfile whose current version still holds a large number of entries
+    carried over unchanged from the snapshot, so it falls under the "combined
+    work" reason below.
+
+        # bun.lock is not a wholesale replacement (bash/zsh): the change is
+        # far smaller than either version's total line count
+        git show base-snapshot/v2.46.0:bun.lock | wc -l
+        git show HEAD:bun.lock | wc -l
+        git diff --no-index --numstat \
+          <(git show base-snapshot/v2.46.0:bun.lock) <(git show HEAD:bun.lock)
+
+    **With license texts of that kind set aside, the conclusion is not
+    weakened**: **those files as a whole may only be distributed under the
+    terms of AGPL-3.0-or-later** -- the text entries as combined works,
+    because the Qianmo portion inside them is an AGPL work; the six `.node`
+    files not as combined works, but because they are distributed with, and
+    carry the license of, their AGPL source. MIT is permissive and may be
+    incorporated into an AGPL work, so there is no conflict of direction; but
+    **"layered by provenance" is in no way "may be taken under MIT"** --
+    taking those 180 files, and the Qianmo changes inside them, is not
+    governed by MIT; except for the root `LICENSE` -- itself the license
+    text, bound only by FSF's verbatim-copy terms -- the rest is subject to
+    the AGPL.
+
+    There are three reasons for not adding headers to them. First, the header
+    marks **which layer a file came from**, not who wrote which line: a file
+    that came from the base project and was afterwards modified by Qianmo is
+    still a file of base provenance. Second, **this is a marking convention we
+    set ourselves, not something MIT demands of us**: what MIT asks is that the
+    license and copyright notice be *included in copies*, which this repository
+    discharges through the verbatim `LICENSE.base`; it does not forbid us from
+    putting other identifiers on a file, and an SPDX line erases nothing. We
+    leave them off so that "header / no header" keeps meaning **the provenance
+    layer and nothing else** -- put one on a modified base file and the mark
+    would stand for two things at once and stop being decidable. Third, this
+    repository follows upstream on a two-to-four-week cadence
+    (docs/dev/charter.md §5.7), and three lines inserted at the top of a file
+    conflict only where upstream also touches that file's head, **not 180
+    conflicts at every synchronization**, though as many as 180 in the worst
+    case.
+    Which lines inside those files are Qianmo's is recorded by git history --
+    the command is the work-surface command given in section 2 below. The root
+    `LICENSE` is itself one of the 180 -- the extreme case used at the start of
+    this bullet: base provenance by path, and not one line of upstream content
+    left inside it.
+
+    See section 2 below.
+
+1.6 The six build artifacts in `vendor/audio-capture/`
+----------------------------------------
+
+  * **The `vendor/audio-capture/` exception no longer exists, but which layer
+    those files sit in has to be stated separately**: the six prebuilt `.node`
+    files there previously had no source at all anywhere. They have now all
+    been rebuilt from source held in this repository
+    (`packages/audio-capture-napi/native/`, whose `.rs` and `.toml` source
+    files all carry the AGPL-3.0-or-later file header; the `Cargo.lock` and
+    `.gitignore` beside them do not, being a generated file and a tooling
+    config rather than source): `arm64-darwin`, `x64-darwin`,
+    `arm64-linux` and `x64-linux` were replaced on 2026-08-30, and `x64-win32`
+    and `arm64-win32` were built the same day on a GitHub Actions
+    `windows-latest` runner and installed. **They belong to the AGPL layer, but
+    not by virtue of a file header — they belong to it because they are build
+    artifacts of that AGPL source**: derived from it and distributed together
+    with it, they carry the license of the source they are built from. The
+    Corresponding Source for them is **more than `native/` alone** -- AGPL-3.0
+    section 1 (worded as GPL-3.0 section 1 is) counts "scripts to control those
+    activities" as part of it -- so it includes at least
+    `packages/audio-capture-napi/native/` (the crate source and its
+    `Cargo.lock`; the `build.rs`, `rust-toolchain.toml` and `.cargo/config.toml`
+    beside them are build-controlling material as well -- the latter two pin the
+    toolchain version and linker flags such as `+crt-static` -- but all of them
+    sit inside `native/` and are covered along with that directory, so they are
+    not listed separately), `scripts/build-audio-capture.sh`, the
+    `scripts/audio-capture-cross.toml` that script reads (the `cross`
+    configuration used for the Linux cross builds; `grep -n CROSS_CONFIG_FILE
+    scripts/build-audio-capture.sh` shows the build script referencing it
+    directly), and `.github/workflows/build-audio-capture-windows.yml`. **Those
+    three sit outside `native/`**; section 5 of this file lists the build script
+    and the workflow as provenance elements in their own right, but not that
+    `cross` configuration.
+
+    **One known gap, stated plainly**: those six `.node` files statically link
+    the third-party Rust crates recorded in `Cargo.lock` (122 package entries
+    there, build-time-only ones included), whereas this repository's SBOM
+    (`docs/dev/sbom-m0.json` / `sbom-m0.md`) **takes only `bun.lock` and the
+    `license` fields under `node_modules` as its input**, so the whole Rust
+    dependency tree falls outside its coverage (`grep -c 'pkg:cargo'
+    docs/dev/sbom-m0.json` returns 0). **This is outstanding work**; this file
+    does not claim it is covered.
+
+    **What is missing is not only the inventory but the characterization**:
+    whether the third-party crates recorded in `Cargo.lock` that are linked
+    into those artifacts form part of the Corresponding Source in the sense of
+    AGPL-3.0 section 1 is **not a legal determination this notice makes**.
+    What can be stated as fact is only this: the source of those crates is
+    publicly available under their respective licenses, and which version of
+    each is used is pinned entry by entry in `Cargo.lock`, a file that is
+    itself in this repository and is distributed together with the source.
+    **Whether that source must also be supplied alongside a distribution is
+    left to the project lead to decide**; this notice does not decide it on
+    their behalf.
+
+    Two points must be read alongside that, so the test in the previous bullet
+    is not misapplied to them:
+
+      - The `git grep … | awk -F: '$2<=5'` command above is **a test over
+        header-bearing source files, documentation, and configuration files** — it reads file headers — and a binary is outside its
+        scope by construction. These six `.node` files are therefore **not
+        part of that count** — the 647 files it reports are all source files,
+        documentation, or configuration files.
+        Running the command simply never lists them, and that is not an
+        omission.
+      - The reverse inference "carries no SPDX header, therefore it is in the
+        base MIT layer" **does not hold for binaries**. The previous bullet
+        describes how the base and Qianmo layers of **source files** are told
+        apart; it is not a rule for classifying build artifacts shipped with
+        the repository.
+
+    **A separate verification gap remains**: `arm64-win32` has never been
+    loaded or executed on any machine (the runner that built it is x86_64 and
+    cannot load an aarch64 DLL), so its evidence is limited to a successful
+    build, a clean `clippy -- -D warnings`, and structural checks. **That is a
+    verification gap, not a license gap** — it comes from the same source as
+    the other five and nothing about its license is undetermined. The
+    per-triple level of evidence is set out in section 5 below.
+
+1.7 Licensing of the non-code assets
+----------------------------------------
+
+The path test above places 30 **non-code assets** in Qianmo's layer (34 when
+they were classified on 2026-08-30; the 4 application documents among them
+were removed from the current version on 2026-09-26 -- see Class C below),
+while AGPL-3.0 is a software license and does not apply to images and
+application documents. All 30 are application materials checked in together
+by the project-initialization commit `67f6081` (before the base-import commit
+`3380c88`). They have no coupling to the runtime: they enter neither the build
+nor `dist/`, and nothing outside `docs/` and this file refers to them.
+
+    # No output. Neither exclusion at the end may be omitted: docs/ contains
+    # the documents that refer to the assets, and this file itself contains
+    # both path strings, so a test in NOTICE will otherwise match itself.
+    git -c core.quotePath=false grep -Il 'assets/brand\|assets/charts' \
+        -- . ':!docs' ':!NOTICE'
+
+**They are divided by use into three classes, each with its own licensing
+position.**
+
+This is the same set as the 27 `.jpg` and 3 `.png` listed above, counted on a
+different axis. Class A is 26 `.jpg` + 1 `.png` = 27; class B is 1 `.jpg` +
+2 `.png` = 3. Thus 27 + 3 = 30, matching the extension count 27 + 3 = 30.
+Class C is 0 in the current version (it was 2 `.pdf` + 2 `.docx` = 4, and
+the three classes totalled 34 on 2026-08-30).
+The extension counts are computed by `bun run check:license-headers --report`
+(see section 1.2); the class membership is listed item by item below.
+
+  * **Class A -- project-made works, CC BY-SA 4.0** (SPDX identifier
+    `CC-BY-SA-4.0`; license URI
+    https://creativecommons.org/licenses/by-sa/4.0/). This class consists of
+    all 24 infographics under `docs/assets/charts/` (that directory contains
+    only `.jpg` files; `git -c core.quotePath=false ls-files
+    docs/assets/charts | wc -l` currently returns 24), plus
+    `docs/assets/brand/正文页背景.jpg`,
+    `docs/assets/brand/愿景水墨图.jpg`, and
+    `docs/assets/brand/ChatGPT Image Aug 10, 2026, 07_23_41 PM.png`.
+
+    **Not checking in the license text is deliberate**: CC BY-SA 4.0 section
+    3(a)(1) requires retaining a URI or hyperlink to the license; unlike the
+    GPL family, it does not require a copy of the full text. Adding one would
+    create another header-less file requiring a gate exemption without adding
+    a compliance benefit.
+
+    **The `.png` is AI-generated, and is identified as such here**. It embeds
+    OpenAI C2PA Content Credentials: its digital source type is
+    `trainedAlgorithmicMedia`, the generator is `gpt-image`, and the signing
+    chain names `OpenAI Media Service API` and `OpenAI OpCo, LLC`.
+    **Copyrightability of AI-generated material is uncertain in some
+    jurisdictions**; the grant covers only rights actually held, and **this
+    CC BY-SA statement does not assert rights beyond those actually held**.
+
+        # C2PA traces among all 30 assets (only this one is reported)
+        git -c core.quotePath=false grep -lai c2pa -- docs/assets
+
+    **The other 29 produce no `c2pa` match, but no C2PA does not mean not
+    AI-generated**: re-encoding, cropping, or saving through another tool can
+    strip C2PA. This evidence can establish presence, not absence, so this
+    notice does not say that all of the other assets are non-AI-generated.
+
+    **The repository records neither how the 24 infographics were made nor a
+    generation script, so this notice makes no source assertion about them.**
+    File inspection supports only three narrower observations, each read with
+    its source: **the EXIF tags ImageMagick reports** are identical across all
+    24 files and consist only of `ColorSpace`, `ExifOffset`,
+    `PixelXDimension`, and `PixelYDimension`; `identify` reports no camera tags
+    (`Make`, `Model`, or `DateTimeOriginal`) and no `Software` tag; and the
+    longer side is always 1500 px (four are portrait images at 1000 x 1500),
+    not a common screen resolution. **For the first two observations, that is
+    "identify does not report them", not "the file does not contain them"**:
+    MakerNote data, IFDs that `identify` skips, and non-standard segments may
+    not appear in its output. As with C2PA, this evidence can establish
+    presence, not absence. **The observations support only "not camera
+    photographs and almost certainly not screenshots"; they do not establish
+    who made the images or with what.**
+
+        # EXIF tag set (requires ImageMagick): one output line means all 24 match
+        for f in docs/assets/charts/*.jpg; do
+          identify -format '%[EXIF:*]' "$f" | cut -d= -f1 | sort | tr '\n' ' '; echo
+        done | sort | uniq -c
+        # Longer side (outputs only 1500)
+        identify -format '%w %h\n' docs/assets/charts/*.jpg \
+          | awk '{print ($1>$2?$1:$2)}' | sort -u
+
+  * **Class B -- third-party marks, not granted under any license of this
+    repository** (3 files): `docs/assets/brand/大赛logo大图.png`,
+    `docs/assets/brand/大赛logo横版.png`, and
+    `docs/assets/brand/封面.jpg`. The mark has been composited into the cover,
+    so it cannot be separated merely by removing one file. It is the official
+    mark of the **China International College Students' Innovation
+    Competition**, and this repository contains **no authorization, source,
+    or permission-to-use record** for it. The three files are retained
+    verbatim solely as application materials; **a third party may not reuse
+    them in reliance on this repository's licenses**. Section 5 below gives
+    the itemization, evidence level, and reproducible commands.
+
+  * **Class C -- application documents, All rights reserved; removed from the
+    repository on 2026-09-26** (0 files in the current version, formerly 4):
+    `docs/阡陌项目计划书.docx` and its `.pdf`, and
+    `docs/阡陌创新训练项目申请书.docx` and its `.pdf`. **They have never been
+    granted under any open-source license in this repository.** On 2026-09-26
+    the project lead decided to remove them from the current version and keep
+    the originals elsewhere, **without rewriting history**: commits before the
+    removal (from the project-initialization commit `67f6081` onward) and
+    previously released source archives still contain them. Wherever a copy
+    is obtained from -- any historical version or source archive -- this
+    position still applies: they may not be used, copied, or redistributed in
+    reliance on this repository's licenses.
+
+    They were placed in this class for two reasons: (1) their text contains
+    personal information -- team members' student numbers, telephone numbers,
+    and email addresses, and the names of the team members and the faculty
+    adviser -- which is also why they were removed; and (2) one document
+    embeds the Class B third-party marks. **The second reason applies to only
+    one document and is not asserted of all four**: `word/media/` in
+    `docs/阡陌项目计划书.docx` contains byte-for-byte copies of all three
+    Class B files, whereas all 9 embedded media files in
+    `docs/阡陌创新训练项目申请书.docx` are Class A infographics and include no
+    Class B file. The two `.pdf` files are exports from the same sources, but
+    PDF encoding rewrites image streams, so no claim about their embedded
+    marks is made here; reason (1) is sufficient to place them in this class.
+
+        # Historical versions only: the two .docx files are no longer in the
+        # current version. Find the commit that deleted them, take the files
+        # from its parent, then compare word/media/ byte for byte with the
+        # three Class B marks
+        rev=$(git log -1 --format=%H --diff-filter=D -- 'docs/阡陌项目计划书.docx')^
+        for doc in docs/阡陌项目计划书.docx docs/阡陌创新训练项目申请书.docx; do
+          d=$(mktemp -d); git show "$rev:$doc" > "$d/doc.docx"
+          unzip -q -o "$d/doc.docx" 'word/media/*' -d "$d"
+          shasum -a 256 "$d"/word/media/* | cut -d' ' -f1 | sort -u > "$d/embedded"
+          for f in docs/assets/brand/封面.jpg docs/assets/brand/大赛logo大图.png \
+                   docs/assets/brand/大赛logo横版.png; do
+            grep -qxF "$(shasum -a 256 "$f" | cut -d' ' -f1)" "$d/embedded" \
+              && printf '%s ← %s\n' "$doc" "$f"
+          done
+        done
+        # Outputs three lines, all pointing to docs/阡陌项目计划书.docx
+
+1.8 Why AGPL, and the edges of this relicensing
+----------------------------------------
+
+**Why AGPL rather than GPL**: Qianmo's second product line is a communication
+and collaboration network connecting resident agents. The most likely way for
+it to be taken without reciprocity is for someone to run it as a hosted
+service -- which GPL-3.0 does not reach and AGPL-3.0 section 13 (Remote
+Network Interaction) does. For a network-shaped product, only AGPL is strict
+in substance.
+
+**The MIT-to-AGPL direction is permitted**: MIT is permissive and may be
+incorporated into an AGPL work; the reverse is not true. Contributing this
+repository's changes to the base layer back upstream (MIT) therefore requires
+a separate grant. The base project and this repository share one owner, so
+dual licensing is available, but it is **not automatic** and is decided case
+by case. Per roadmap v2.41 the current position on upstreaming is "not for
+now, revisit individually".
+
+**This change is not retroactive**: the repository was distributed under MIT
+before this change. Copies obtained under MIT keep that grant; AGPL applies
+only to versions published after this change.
+
+**Section 13 binds us too**: AGPL-3.0 section 13 requires an operator to offer
+Corresponding Source to users who interact with the program over a network.
+Qianmo's console and its resident nodes are exactly that, **including the
+deployments we run ourselves**. This is the one ongoing obligation the
+relicensing adds, and it is not a clause that only applies to other people.
+
+  Note: earlier revisions of this repository (commit 67f6081 and prior) used the
+  Apache License 2.0. That decision was superseded by the base-adoption change;
+  see docs/dev/charter.md §5.5.
+
+2. BASE PROVENANCE
+--------------------------------------------------------------------------------
+
+This repository is a downstream fork of open-claude-code. The base was imported
+into the repository root as an unmodified snapshot.
+
+  Upstream project   open-claude-code (CLI name: occ)
+  npm package        @sweetcornna/open-claude-code
+  Import commit      848ad8c2c8daca9f5aa2410da555553e07700f5d
+                     tag v2.38.3 -- the upstream commit at the time of the
+                     unmodified-snapshot import. A historical anchor; it does
+                     not change when the base is synchronized.
+  Current pin        1128a3919a7f01298a6cbf5c468a839c6cf4ee6a
+                     tag v2.46.0 -- the pin after the first upstream
+                     synchronization on 2026-08-17.
+  Base snapshot      base-snapshot/v2.46.0
+                     a tag in this repository pointing at a **parentless**
+                     unmodified snapshot of the base tree, whose contents are
+                     the base as currently pinned. It is the measurement
+                     baseline for "how much of this is base code"; every
+                     subsequent synchronization gets its own
+                     base-snapshot/<version> tag.
+  Upstream license   MIT License
+                     Copyright (c) 2026 open-claude-code contributors
+
+The import record and any subsequent upstream synchronization records are kept
+in BASE.md at the repository root.
+
+The upstream MIT license and copyright notice are **retained** verbatim in
+`LICENSE.base`: it is byte-for-byte identical to the `LICENSE` held in the base
+snapshot -- that is, `base-snapshot/v2.46.0:LICENSE` -- at 1,450 bytes, which
+can be checked now:
+
+    git show base-snapshot/v2.46.0:LICENSE | cmp - LICENSE.base
+
+  Note that what is byte-for-byte identical is the snapshot's **`LICENSE`**,
+  not a `LICENSE.base` inside the snapshot. The path `LICENSE.base` was added
+  by Qianmo and does not exist in the snapshot at all -- `git cat-file -e
+  base-snapshot/v2.46.0:LICENSE.base` errors out. Checking the earlier wording
+  ("identical to the `base-snapshot/v2.46.0` tag") literally would have led to
+  the false conclusion that the sentence was untrue.
+
+Modifications made in this repository do not alter the applicability of that
+license to the base layer.
+
+**Work boundary**: the base was imported as an unmodified snapshot in **this
+repository's commit 3380c88**; every commit after it is the work of the Qianmo
+AgentNest Team, **with the sole exception of the pure upstream-synchronization
+commits** -- their content comes entirely from an upstream patch; at present
+there is exactly one such commit, `d04a79dd` (2026-08-17), and every further
+upstream synchronization adds one more. The exception is stated here rather
+than corrected further down: "One commit in the work log is not Qianmo's work"
+below gives the detail and the evidence discipline for the same fact, not a
+second account of it. Evidence commands:
+
+  work surface           git diff base-snapshot/v2.46.0..HEAD
+  work log               git log 3380c88..HEAD
+  base contribution      git show --stat base-snapshot/v2.46.0
+
+plus the two pre-import project-setup commits 67f6081 and 74f7a22.
+
+**A downward correction to the work-surface baseline**: this file previously
+gave the work surface as `git diff 3380c88..HEAD`. That stopped holding at the
+first upstream synchronization on 2026-08-17 (v2.38.3 -> v2.46.0), which
+brought some sixty thousand upstream lines into this repository's history;
+measured from the import commit, upstream content is counted as our own work.
+
+**The two figures below are anchored to the commit `c9c74627`, not to a
+date** -- they grow with every commit added to this repository, so they are the
+record of one measurement rather than constants to be quoted. Measured at
+`c9c74627`:
+
+    git diff --shortstat 3380c88..c9c74627
+      -> 1599 files changed, 292973 insertions(+), 39268 deletions(-)
+    git diff --shortstat base-snapshot/v2.46.0..c9c74627
+      -> 1048 files changed, 234068 insertions(+), 31937 deletions(-)
+
+**Whenever a figure is needed, run the command**: substitute `HEAD` for
+`c9c74627`.
+
+**Not even the gap between the two is a constant, and that bears saying.**
+Across the batch of five commits that includes `c9c74627` it holds at 58,905
+insertions, which makes it look structural and therefore stable; but at
+`5c96d0b8` (the last commit of 2026-08-17) it measures 59,784 -- subtract
+`git diff --shortstat base-snapshot/v2.46.0..5c96d0b8` from
+`git diff --shortstat 3380c88..5c96d0b8` to see it. The gap shrinks over time,
+because the Qianmo work that follows keeps modifying and deleting lines
+upstream had added, so the divergence between the two baselines is itself
+moving. **No number here is stable; only the command is.**
+
+That part of the gap comes from the upstream synchronization sitting between
+the two baselines, and it is not Qianmo's work. **The gap is nevertheless not
+the same quantity as the size of the synchronization itself**, which as landed
+measures 650 files, +60,362, -7,431 (`git show --shortstat d04a79dd`). The two
+figures are not expected to agree: the Qianmo work done after the
+synchronization went on to modify or delete some of the lines upstream had
+added, so "the difference between two measurements" and "the size of that
+synchronization" are different quantities to begin with.
+
+  **That figure for `d04a79dd` is not the same quantity as the one recorded in
+  BASE.md; both are correct and they do not contradict each other**: BASE.md
+  (and charter.md, positioning-m0.md, upstream-sync-drill.md) records the
+  **upstream patch range** `848ad8c2..1128a391` at 650 files, +60,363, -7,417,
+  whereas the figure here is that of **the single commit by which the
+  synchronization landed in this repository**, 650 files, +60,362, -7,431. One
+  conflicted file in that synchronization was resolved by taking the upstream
+  side verbatim, which is why what landed differs slightly from what the patch
+  contained.
+
+**The error ran in the direction of overstating our own output, which is why it
+had to be corrected** -- overstating a figure does more damage than
+understating one. The convention follows docs/dev/charter.md §5.5, "v2.13
+update -- after the first upstream synchronization the work surface is measured
+from the base snapshot tag".
+
+**The work-surface figure must always be reported together with its
+composition; the bare total is not to be quoted on its own** -- per the list of
+disallowed claims in docs/dev/positioning-m0.md §1.4, reporting a total line
+count without a breakdown is itself a disallowed claim. Of the 234,068
+insertions at `c9c74627`, at least three items are plainly not writing of ours:
+`docs/dev/sbom-m0.json` contributes 31,776 lines generated by `bun run sbom`,
+the root `LICENSE` contributes 661 lines that are the FSF's AGPL-3.0 text, and
+`LICENSE.base` contributes 29 lines that are the upstream MIT text -- 32,466
+lines together, about 14%. The full breakdown convention, and the rule for
+which single figure to give when only one can be given, are in
+docs/dev/positioning-m0.md §3.1; the command to run is `git diff --numstat
+base-snapshot/v2.46.0..HEAD | sort -rn | head`.
+
+**One commit in the work log is not Qianmo's work**: within
+`git log 3380c88..HEAD`, `d04a79dd` (2026-08-17, "three-way application of
+upstream open-claude-code v2.46.0") consists entirely of content taken from
+the upstream patch, and must be declared separately whenever the log is
+offered as evidence.
+
+**The standing of the import commit 3380c88 is unchanged**: it remains the
+historical starting point of "where Qianmo's work begins" and merely ceases to
+double as the measurement baseline for "how much of this is base code" -- that
+role now belongs to the tag `base-snapshot/v2.46.0`.
+
+  Note: this repository was created by an unmodified snapshot import and does
+  **not** contain the upstream git history. The evidence baselines are
+  therefore objects inside this repository -- the import commit 3380c88 and
+  the tag base-snapshot/v2.46.0 -- not the upstream pinned commit 848ad8c2;
+  the latter is a SHA in the *upstream* repository and is not a valid git
+  object here. Upstream provenance rests on the records in BASE.md and on
+  comparison against the upstream repository, not on git objects in this
+  repository. (Per docs/dev/charter.md §5.5, "evidence command erratum", v2.4,
+  and the v2.13 update.)
+
+3. NATURE OF THE BASE (STATED PLAINLY)
+--------------------------------------------------------------------------------
+
+The upstream project open-claude-code describes itself as a "community edition"
+of Anthropic's Claude Code — a community-maintained derivative built on a
+reverse-engineered restoration of that codebase (see its README).
+
+Its MIT license is a grant by the upstream project's authors covering their own
+restoration and original work. This notice makes no legal determination
+regarding the relationship between that grant and the expression that was
+restored.
+
+4. ANTHROPIC TRADEMARKS AND BRANDING
+--------------------------------------------------------------------------------
+
+"Claude", "Claude Code" and "Anthropic" are trademarks of Anthropic, PBC.
+
+  * This project is **not affiliated with, endorsed by, or sponsored by**
+    Anthropic, PBC.
+  * This project claims no rights in those trademarks and does not represent, or
+    imply, any license, partnership or endorsement relationship with Anthropic.
+
+**On Anthropic-related identifiers retained in the code**: for protocol
+compatibility, the base deliberately retains certain strings containing the
+names above. They are load-bearing protocol rather than branding, and changing
+them breaks functionality. Known cases:
+
+  * the system prompt preamble "You are Claude Code, Anthropic's official CLI
+    for Claude" (prompt caching and behaviour tuning key off that exact text);
+  * the "claude-code/<version>" User-Agent;
+  * the OpenTelemetry service.name "claude-code";
+  * the CLAUDE.md / CLAUDE.local.md / AGENTS.md memory filenames (a shared
+    cross-tool ecosystem convention);
+  * the CLAUDECODE=1 child-process environment variable (cross-tool hints
+    protocol).
+
+  Retaining these identifiers for technical reasons does **not** constitute any
+  claim of affiliation.
+
+5. THIRD-PARTY COMPONENTS
+--------------------------------------------------------------------------------
+
+This repository includes third-party components introduced by the base project
+and its dependency tree, each under its own license.
+
+**Dependency and license inventory (SBOM)**: the machine-readable inventory is
+docs/dev/sbom-m0.json and the human-readable summary is docs/dev/sbom-m0.md.
+Both are generated by `bun run sbom` and can be reproduced at any time.
+
+**Prebuilt native binaries shipped with the repository** (not from the npm
+dependency tree):
+
+  * `vendor/audio-capture/` — `audio-capture.node` (a native N-API addon) for
+    six platform triples (arm64/x64 × darwin/linux/win32), imported together
+    with the base snapshot and copied into `dist/vendor/` by `build.ts` /
+    `scripts/post-build.ts`, i.e. shipped with the build output. **The fact
+    that no source existed anywhere has been resolved**:
+    `packages/audio-capture-napi/native/` (Rust + napi-rs 2.16 / cpal 0.15.3)
+    has been checked in as a from-scratch rewrite (clean-room, not decompiled
+    from the original binaries). Its `.rs` and `.toml` source files all carry
+    the `SPDX-License-Identifier: AGPL-3.0-or-later` header and implement all
+    eight exports the loader at `packages/audio-capture-napi/src/index.ts`
+    contracts for (`startRecording` / `stopRecording` / `isRecording` /
+    `startPlayback` / `writePlaybackData` / `stopPlayback` / `isPlaying` /
+    `microphoneAuthorizationStatus`). The crate requires Rust >= 1.85
+    (`coreaudio-sys` needs edition2024), pinned to 1.85.0 via the crate's own
+    `rust-toolchain.toml`. Build and verification steps are in
+    docs/dev/audio-capture-native.md.
+
+    **Replacement progress per triple (stated plainly: 6/6 done; the level of
+    evidence differs — `arm64-win32` has build and structural checks only, no
+    runtime evidence)**:
+      - `arm64-darwin` — **replaced**: built from scratch successfully,
+        `clippy --all-targets -- -D warnings` and the unit tests pass; verified
+        on real local hardware via Bun for both recording (16 kHz / 16-bit LE
+        / mono, 50 ms chunks, consistent across three runs at 15584-15600 Hz)
+        and playback (start/stop, idempotency, restart), all eight exports are
+        present, and `microphoneAuthorizationStatus()` returns 3, matching
+        both the original vendor binary and an independent Swift probe.
+      - `x64-darwin` — **replaced**: verified via **Rosetta 2 with a real
+        x86_64 Node v26.3.0**, loaded side by side with the original vendor
+        binary — all eight exports present, `microphoneAuthorizationStatus()`
+        returns 3, and status-flag behaviour matches.
+      - `x64-linux` — **replaced**: verified via **Docker `linux/amd64` with
+        `node:22-slim`** (with `libasound2` installed), loaded side by side
+        with the original vendor binary — matches item-for-item.
+      - `arm64-linux` — **replaced**: verified via a **native Docker
+        `linux/arm64` container**, loaded side by side with the original
+        vendor binary — matches item-for-item.
+      - `x64-win32` — **replaced**: built by the manually triggered workflow
+        `.github/workflows/build-audio-capture-windows.yml` (`workflow_dispatch`
+        only, `windows-latest`, target `x86_64-pc-windows-msvc`) and loaded for
+        real with Node on that same runner — all eight exports are functions
+        and `microphoneAuthorizationStatus()` returns 3 (within the valid range
+        0..=3).
+      - `arm64-win32` — **replaced, but with no runtime evidence**: built by
+        the `aarch64-pc-windows-msvc` matrix leg of the same workflow;
+        `cargo build --release` succeeded and
+        `cargo clippy --release -- -D warnings` is clean. **This artifact has
+        never been loaded or executed on any machine** — the `windows-latest`
+        runner is x86_64 and structurally cannot load an aarch64 DLL. The
+        workflow does not pretend otherwise: it prints an explicit skip reason
+        instead. Beyond the build and the static check, the only evidence is
+        structural (PE machine type `0xaa64`, `napi_register_module_v1`
+        present, all eight export-name strings present, dependency surface
+        identical to the original). **The load check on a real Windows on ARM
+        machine has not been done, and is not scheduled** — on 2026-08-30 the
+        project owner decided against doing it (the project has no Windows on
+        ARM hardware) and suspended it indefinitely; see docs/dev/charter.md
+        v2.17, item 4. This is a verification gap, not a license gap — the
+        artifact comes from the same source as the other five.
+
+    **On `--allow-unverified-install` (to avoid the misreading that these were
+    installed without verification) — this paragraph is about the three
+    cross-architecture darwin/linux artifacts only; the two Windows artifacts
+    are covered immediately below**: the automatic gate in
+    `scripts/build-audio-capture.sh` can only verify whether *this* machine
+    can natively `require()`-load an artifact, so `x64-darwin`, `arm64-linux`
+    and `x64-linux` went through that flag. **That does not mean they were
+    unverified** — each was loaded for real on its target architecture (a
+    container for the two Linux triples, Rosetta 2 for `x64-darwin`) and
+    compared side by side against the original vendor binary before being
+    installed by hand. That is a different thing from installing something
+    that was never tested at all.
+
+    **The two Windows artifacts did not go through that script at all, so the
+    sentence above does not cover them**: `scripts/build-audio-capture.sh
+    --install` copies the path cargo has **just built on this machine**
+    (`built_path`), and cannot install a file downloaded from elsewhere. What
+    was actually done: `gh run download` fetched the two artifacts from
+    workflow run `33292271322`; after checking the PE machine type,
+    `napi_register_module_v1`, the eight export names and the dependency
+    surface, they were **copied directly into**
+    `vendor/audio-capture/{x64-win32,arm64-win32}/audio-capture.node`, with the
+    originals backed up first (and retrievable via `git show 5459375f:…`, see
+    below). The level of evidence diverges at this point:
+      - `x64-win32` — **had runtime verification before it was installed**:
+        the same runner that built it loaded it for real with Node in the same
+        run; all eight exports were functions and
+        `microphoneAuthorizationStatus()` returned 3.
+      - `arm64-win32` — **is the one triple of the six for which "no runtime
+        verification at the time it was installed" is literally true**. The
+        defence made just above for the three cross-architecture artifacts
+        ("that does not mean they were unverified") **does not apply to it**,
+        and the two must not be read as one: those three were loaded for real
+        on their target architecture before being installed, whereas this one
+        has still never been loaded or executed on any machine.
+
+    **One piece of runtime-dependency equivalence evidence (answering "does
+    swapping in the self-built artifact break things for Linux users?")**:
+    comparing the `NEEDED` section via `readelf -d` on the Linux artifacts —
+    the original vendor binary depends on `libasound.so.2`, `libpthread.so.0`,
+    `libc.so.6`, `libdl.so.2`, `ld-linux-x86-64.so.2`; the self-built artifact
+    depends on all of those **plus** `libgcc_s.so.1` and `libm.so.6`.
+    **Conclusion: the hard dependency on ALSA was already there in the
+    original vendor binary, not introduced by the self-built one**; the two
+    extra libraries are present on any glibc system as a matter of course. The
+    runtime dependency surface has not materially changed.
+
+    **The same evidence for the Windows artifacts, and there it is a zero
+    difference**: reading the PE **import table** and comparing item by item —
+    the original and the self-built artifact have **identical load-time
+    imports, 7 of them**: `advapi32.dll`, `api-ms-win-core-synch-l1-2-0.dll`,
+    `bcryptprimitives.dll`, `kernel32.dll`, `ntdll.dll`, `ole32.dll`,
+    `oleaut32.dll`; **delay imports: none**. All four files (original and
+    self-built, x64 and arm64) match item for item. Reproducible commands (the
+    two architectures need different objdumps):
+    `x86_64-w64-mingw32-objdump -p <x64 file> | grep 'DLL Name:'` and
+    `objdump -p <arm64 file> | grep 'DLL Name:'`.
+    **`dbghelp.dll` does not count**: it is in no artifact's import table — it
+    is the symbolisation target that the Rust std backtrace `LoadLibrary`s at
+    panic time, so it exists only as a string in the binary. An earlier
+    extraction with `strings -a <file> | grep -oiE '[A-Za-z0-9_.-]+\.dll'`
+    miscounted it as an 8th entry: `strings` is a heuristic that can only
+    over-include, and cannot tell load-time imports, delay imports and
+    incidental strings apart. **The conclusion is unchanged — the two match
+    item for item; what changed is the method and the number (8 -> 7).** If
+    objdump is not at hand and the `strings` method is used anyway, the
+    crate's own module name must be excluded as well as `dbghelp.dll` — it is
+    `audio_capture.dll` in the self-built artifact and
+    `audio_capture_napi.dll` in the original (both are the build output's name
+    before it was renamed to `.node`, not an external dependency; the two
+    names differ, so both must be excluded). **This is stronger evidence than
+    the Linux comparison above**, where the self-built artifact added two
+    libraries; and with the import table the two methods are now on equal
+    footing as well (`readelf -d`'s `NEEDED` and the PE import table are both
+    authoritative readings, not string scans).
+    It did not come out that way on the first attempt: the first Windows build
+    additionally pulled in `vcruntime140.dll`, which ships with neither Windows
+    itself nor the Node.js installer, so on a machine without the Visual C++
+    redistributable `require()` would throw — and the loader in
+    `packages/audio-capture-napi/src/index.ts` swallows that error and degrades
+    silently, so the symptom would have been voice mode disappearing without a
+    trace. Building with `-C target-feature=+crt-static` (set per target, not
+    globally) removed it; the reasoning and the check are in
+    docs/dev/audio-capture-native.md section 3.2.
+
+    **The present state is therefore**: all six binaries under
+    `vendor/audio-capture/` **are built from source held in this repository**;
+    the original vendor artifacts brought in with the base snapshot have all
+    been replaced, and no binary of undetermined license remains in the
+    repository. **The provenance of the originals is kept here for the
+    record**: the upstream repository
+    (https://github.com/sweetcornna/open-claude-code) likewise carries only
+    those six prebuilt artifacts, with no accompanying source, build script or
+    LICENSE file (checked 2026-08-15); symbols in those binaries indicate a
+    Rust + napi-rs build (statically linked napi 2.16.17, cpal 0.15.3, and per
+    platform coreaudio-rs 0.11.3 / alsa 0.9.1 / windows 0.54.0). The two
+    replaced Windows originals can still be retrieved with
+    `git show 5459375f:vendor/audio-capture/<triple>/audio-capture.node`
+    (sha256 `2a8267f4…` for x64, `98386089…` for arm64).
+
+    **How this interacts with the relicensing to AGPL (recorded plainly)**: the
+    project owner had decided to bring these six binaries into the copyleft
+    layer and to supply their source — the source has been supplied, and
+    **all six triples are now artifacts built from it**, so the obstacle to
+    labelling them AGPL ("labelled AGPL but no source to ship") no longer
+    exists. Of the original two ways to close this, the project owner chose
+    the first — supply source and mark as AGPL — and that work is now done.
+    **What remains is a verification gap, not a license gap**: `arm64-win32`
+    has no runtime evidence, and the load check on a real Windows on ARM
+    machine **has not been done and is not scheduled** (charter v2.17, item 4).
+    Its license standing is not in question — it comes from the same
+    in-repository AGPL source as the other five. Tracked as D-9 (disposed) in
+    docs/dev/license-chain-m0.md.
+
+  * `src/utils/vendor/ripgrep/` — the ripgrep executable, **not checked in**;
+    `scripts/postinstall.cjs` downloads it from microsoft/ripgrep-prebuilt
+    v15.0.1 at install time and verifies each archive against a hard-coded
+    SHA-256. The microsoft/ripgrep-prebuilt build project is published under
+    the MIT license; ripgrep itself is governed by the license files of the
+    upstream BurntSushi/ripgrep project.
+
+**Third-party marks distributed with the repository** (not from the dependency
+tree and **not granted under any license of this repository**):
+
+  * `docs/assets/brand/大赛logo大图.png`,
+    `docs/assets/brand/大赛logo横版.png`, and
+    `docs/assets/brand/封面.jpg` -- the **official marks of the China
+    International College Students' Innovation Competition**. The first two
+    are the marks themselves (large and horizontal versions); the third is an
+    application cover into which the mark has been composited, so it cannot be
+    separated merely by removing one file. All three were added in the single
+    project-initialization commit `67f6081` and have not changed since. They do
+    not enter the build or `dist/`; they are distributed only with the source
+    repository.
+
+    **Evidence level: no authorization record in this repository.** There is
+    no source, authorization, or permission-to-use record to be found here:
+    `docs/assets/brand/` contains only its six asset files, with no LICENSE,
+    README, or source note, and the complete git history of these three files
+    consists of that one import. Two commands make this checkable:
+
+        # complete history of the three files: only the project-initialization commit
+        git -c core.quotePath=false log --oneline \
+            -- 'docs/assets/brand/大赛logo大图.png' \
+               'docs/assets/brand/大赛logo横版.png' \
+               'docs/assets/brand/封面.jpg'
+        # directory contents: assets only, with no accompanying authorization or source file
+        git -c core.quotePath=false ls-files docs/assets/brand
+
+    **Position**: these files are retained verbatim solely as application
+    materials. They are granted under neither this repository's
+    AGPL-3.0-or-later license nor the MIT license of its base layer. **A third
+    party may not reuse them in reliance on this repository's licenses**;
+    anyone wishing to use the mark must obtain authorization from the
+    competition organizer. This repository claims no rights in the mark. See
+    section 1.7 above for their place among the other 27 non-code assets.
+
+**Disclosure of a proprietary development-time dependency**: the root
+`devDependencies` contain `@anthropic-ai/claude-agent-sdk` (and its
+platform-native packages), which is **not** open source — its bundled
+LICENSE.md reads in full "© Anthropic PBC. All rights reserved.", a proprietary
+grant. This repository references it in exactly one `import type` (types only,
+erased at compile time) plus comments; there are zero occurrences in the build
+output `dist/`, so it is **not distributed with this project's artifacts** and
+distributing them does not redistribute that SDK. Its terms are governed by the
+LICENSE inside that package. This disclosure states the composition of the
+dependency tree as a matter of fact and does **not** constitute any affiliation
+with, license from, or endorsement by Anthropic, PBC (see section 4 above).
+
+**Compatibility rules compiled from a third-party open-source project**: the
+Qianmo-owned model-call compatibility layer (M1 P18.5) contains rule tables —
+error-message fragments, error codes, host names, model-name prefixes, numeric
+thresholds, and decision rules such as "drop this request field and send once
+more" — compiled from NousResearch/hermes-agent
+(https://github.com/NousResearch/hermes-agent , MIT License, Copyright (c) 2025
+Nous Research). Only the rules were taken; the code is Qianmo's own.
+hermes-agent is not a dependency of this project, none of its source code is in
+this repository, and none of it is distributed with this project's artifacts.
+
+  * **Source**: commit `f9b29c49b6` (a commit in the owner's fork; the files
+    referenced are byte-identical to upstream NousResearch/hermes-agent commit
+    `8911e2e0ed`), taken on 2026-10-03. The header of each file below names
+    the source file and line numbers for every rule it uses.
+  * **Files** (each released under AGPL-3.0-or-later, see its header):
+      - under `src/services/qianmo/modelCompat/`: `wireHosts.ts`,
+        `outputTokenParam.ts`, `outputTokenDefault.ts`, `overflowText.ts`,
+        `outputCap.ts`, `errorText.ts`, `samplingParams.ts`, `unsupportedParam.ts`;
+      - `packages/@ant/model-provider/src/shared/qianmo/toolCallDeltas.ts`.
+  * **License notice**: as a matter of caution, and under the MIT condition
+    that the copyright notice and permission notice be included in all copies
+    or substantial portions, hermes-agent's notice is reproduced verbatim:
+
+    MIT License
+
+    Copyright (c) 2025 Nous Research
+
+    Permission is hereby granted, free of charge, to any person obtaining a copy
+    of this software and associated documentation files (the "Software"), to deal
+    in the Software without restriction, including without limitation the rights
+    to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+    copies of the Software, and to permit persons to whom the Software is
+    furnished to do so, subject to the following conditions:
+
+    The above copyright notice and this permission notice shall be included in all
+    copies or substantial portions of the Software.
+
+    THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+    IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+    FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+    AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+    LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+    OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+    SOFTWARE.

@@ -1,0 +1,914 @@
+[
+  {
+    "probe": "GET / as none",
+    "status": 401,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 130,
+    "sha256": "7363d99205478cda039430e498e9731423c716e7358a9dbd4b464cce9ec6b3f8"
+  },
+  {
+    "probe": "GET / as none (html)",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/login"],
+      ["referrer-policy", "no-referrer"]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "GET /?window=24h as none (html)",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/login?redirect=%2F%3Fwindow%3D24h"],
+      ["referrer-policy", "no-referrer"]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "GET / as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 85980,
+    "sha256": "1b7fa027b68e13b0ad30c77a2c2aa96588dba338a242b5deaff72d094df2285b"
+  },
+  {
+    "probe": "GET / as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 86394,
+    "sha256": "18f8d0a445583dc33cf446086a3b1aa16a3332f48e68f93c880e5cb1787ebd69"
+  },
+  {
+    "probe": "GET / as view-query",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 85980,
+    "sha256": "1b7fa027b68e13b0ad30c77a2c2aa96588dba338a242b5deaff72d094df2285b"
+  },
+  {
+    "probe": "GET / as admin-query",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 86394,
+    "sha256": "18f8d0a445583dc33cf446086a3b1aa16a3332f48e68f93c880e5cb1787ebd69"
+  },
+  {
+    "probe": "GET / as view-cookie",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 85980,
+    "sha256": "1b7fa027b68e13b0ad30c77a2c2aa96588dba338a242b5deaff72d094df2285b"
+  },
+  {
+    "probe": "GET / as admin-cookie",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 86394,
+    "sha256": "18f8d0a445583dc33cf446086a3b1aa16a3332f48e68f93c880e5cb1787ebd69"
+  },
+  {
+    "probe": "GET / as wrong-bearer",
+    "status": 401,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 130,
+    "sha256": "7363d99205478cda039430e498e9731423c716e7358a9dbd4b464cce9ec6b3f8"
+  },
+  {
+    "probe": "POST / as admin-bearer",
+    "status": 405,
+    "headers": [
+      ["allow", "GET"],
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 61,
+    "sha256": "22ba83a5297b161bd857ded3f443ffbe8b403b4e3d0c151e381a2492b67f19d1"
+  },
+  {
+    "probe": "GET /login as none",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 44993,
+    "sha256": "431f5d547a5a307c4077d17783910b3387c61ec681e18b64c7d6ba6701ec464c"
+  },
+  {
+    "probe": "GET /login?redirect=%2Fchat as none",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 44997,
+    "sha256": "d0ae68e601976eace660abd114e0852181e1f047591f3c8c62dadd5f8327881b"
+  },
+  {
+    "probe": "GET /login as admin-cookie",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/"],
+      ["referrer-policy", "no-referrer"]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "PUT /login as none",
+    "status": 405,
+    "headers": [
+      ["allow", "GET, POST"],
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 67,
+    "sha256": "1f7dfd24440162e04ec9f8ee99f93479ee3956fb486a3ec8987d04d902d33828"
+  },
+  {
+    "probe": "POST /login as none form={\"token\":\"wrong-token-00000000001\"}",
+    "status": 401,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 45326,
+    "sha256": "83a9575b1112b55f932f4a85f722c9ddb4d46a03bdd12ea2c070cdf597873dd2"
+  },
+  {
+    "probe": "POST /login as none form={\"token\":\"view-token-000000000001\"}",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/"],
+      ["referrer-policy", "no-referrer"],
+      [
+        "set-cookie",
+        "qianmo_console=view-token-000000000001; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200"
+      ]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "POST /login as none form={\"token\":\"admin-token-00000000001\",\"redirect\":\"/chat\"}",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/chat"],
+      ["referrer-policy", "no-referrer"],
+      [
+        "set-cookie",
+        "qianmo_console=admin-token-00000000001; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200"
+      ]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "POST /login as none {\"sec-fetch-site\":\"cross-site\"} form={\"token\":\"admin-token-00000000001\"}",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 62,
+    "sha256": "5e05679ed6b612c1b01496caae868d9e5d1fc817ec6234659de01770691f2bb6"
+  },
+  {
+    "probe": "POST /login as none {\"x-forwarded-proto\":\"https\"} form={\"token\":\"admin-token-00000000001\"}",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/"],
+      ["referrer-policy", "no-referrer"],
+      [
+        "set-cookie",
+        "qianmo_console=admin-token-00000000001; Path=/; HttpOnly; SameSite=Strict; Max-Age=43200; Secure"
+      ]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "POST /login as none",
+    "status": 400,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 51,
+    "sha256": "39806f175d79d81463d031ae4e83a63970dd22bc0a160be9c3b27c72b9bff108"
+  },
+  {
+    "probe": "POST /logout as none",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/login"],
+      ["referrer-policy", "no-referrer"],
+      [
+        "set-cookie",
+        "qianmo_console=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+      ]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "POST /logout as admin-cookie",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/login"],
+      ["referrer-policy", "no-referrer"],
+      [
+        "set-cookie",
+        "qianmo_console=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0"
+      ]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "GET /logout as none",
+    "status": 405,
+    "headers": [
+      ["allow", "POST"],
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 62,
+    "sha256": "6d6dfbd7debb8318c3dae5239d7556b0620b5d6f052cffc11d816a8caf880633"
+  },
+  {
+    "probe": "GET /assets/app.css as none",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/css; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 42459,
+    "sha256": "95b26db2426b65202f67fe0e840e3e1b1227cbee171e8f3d088bba9d965057ac"
+  },
+  {
+    "probe": "GET /assets/app.js as none",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/javascript; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 18353,
+    "sha256": "22fad9e744d9509ef301a9fc4a5754395b0b0d225aa4b2e30e6411f1839f8fe1"
+  },
+  {
+    "probe": "GET /assets/nope.js as none",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "21da542f64ff0a5fa044b9f71489064e90ec5a6ed96fa4178be7ffdcf1f722ad"
+  },
+  {
+    "probe": "GET /v0/health as none",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 15,
+    "sha256": "a29ee2b15c494311c52521766e44af56a3ad2248e7a8ab465e5206463c13d288"
+  },
+  {
+    "probe": "GET /v0/limits as none",
+    "status": 401,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 130,
+    "sha256": "7363d99205478cda039430e498e9731423c716e7358a9dbd4b464cce9ec6b3f8"
+  },
+  {
+    "probe": "GET /v0/limits as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 181,
+    "sha256": "b5b555ee57a2eb9367b1d018ccc19996265a5264897eecbb010abb8ee6ef5656"
+  },
+  {
+    "probe": "GET /v0/limits as view-cookie",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 116,
+    "sha256": "58bec0d6033f21c68b21947dccf3f6e00172eb79da18399779ce70f01f1a444d"
+  },
+  {
+    "probe": "GET /v0/agents as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 215,
+    "sha256": "43c8286ef201bc08852688273fd3a9cf8a5a651a541be1ce59de8f849d274eef"
+  },
+  {
+    "probe": "GET /v0/agents as admin-cookie",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 116,
+    "sha256": "58bec0d6033f21c68b21947dccf3f6e00172eb79da18399779ce70f01f1a444d"
+  },
+  {
+    "probe": "GET /v0/agents as admin-cookie+header",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 215,
+    "sha256": "43c8286ef201bc08852688273fd3a9cf8a5a651a541be1ce59de8f849d274eef"
+  },
+  {
+    "probe": "POST /v0/agents as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "POST /v0/agents as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 202,
+    "sha256": "230ba395ddeac5850af9d65b4f6750881d98893f613fcc71592a0664d4c14084"
+  },
+  {
+    "probe": "DELETE /v0/agents/qianmo%3A%2F%2Ftokyo-1%2Fplanner as admin-bearer",
+    "status": 204,
+    "headers": [],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "DELETE /v0/agents/qianmo%3A%2F%2Ftokyo-1%2Fplanner as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "POST /v0/agents/qianmo%3A%2F%2Ftokyo-1%2Fplanner/heartbeat as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 202,
+    "sha256": "230ba395ddeac5850af9d65b4f6750881d98893f613fcc71592a0664d4c14084"
+  },
+  {
+    "probe": "GET /v0/audit as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 269,
+    "sha256": "683cdd95594d005dab2786aea7f91765f466060f8162c3ca1be1180c75d17c8f"
+  },
+  {
+    "probe": "GET /v0/audit?limit=5 as view-query",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 269,
+    "sha256": "683cdd95594d005dab2786aea7f91765f466060f8162c3ca1be1180c75d17c8f"
+  },
+  {
+    "probe": "GET /v0/audit/chain/4bf92f3577b34da6a3ce929d0e0e4736 as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 385,
+    "sha256": "81a5f2742533de352ace2ff0912941e72f6069a289917ccf49853131d06d615d"
+  },
+  {
+    "probe": "GET /v0/servers as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 113,
+    "sha256": "1f84c6644cf3dc4a88cbd7ae2f61c0dce2ecfedb59272d5b242ca88cd97473dd"
+  },
+  {
+    "probe": "PUT /v0/servers/p11/note as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 53,
+    "sha256": "1e8e9fc56f2eba00b9797dff05599ecfa02b70cddf51d2df6e2423e2f8799874"
+  },
+  {
+    "probe": "PUT /v0/servers/p99/note as admin-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 58,
+    "sha256": "10c026f648df004183071684dbdffa3ce554d8090d3bcd56a508b2aacbd5f05c"
+  },
+  {
+    "probe": "POST /v0/wake as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 56,
+    "sha256": "6ddc78ae17fbf92b6c82bbbffe750552fb678c5b43693dbba0ebb6db7052fb64"
+  },
+  {
+    "probe": "POST /v0/wake as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "GET /fragments/roster as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 2451,
+    "sha256": "1c5b9501838c78256ecc06e224dd3bf48fb2e0677c205f98e1cef63332edb1df"
+  },
+  {
+    "probe": "GET /fragments/audit as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 4809,
+    "sha256": "ee0d4b57036390e81ea119a1f2b701f6c5cc7ed2557fc435ceb0d80ff107a64b"
+  },
+  {
+    "probe": "GET /fragments/limits as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 1079,
+    "sha256": "b1661018d733529c12a0c6d6893779eb5b9902bef7d31fc5598f58919603473d"
+  },
+  {
+    "probe": "GET /fragments/chain/4bf92f3577b34da6a3ce929d0e0e4736 as view-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 822,
+    "sha256": "5499c9914b1a3f8ceaa6456d8da66adb09ec2a20a3ecac4e4d70cd394f3ed256"
+  },
+  {
+    "probe": "GET /fragments/nope as view-bearer",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "3dc6e684bf6aa729b71047e6023046d980828a24af17bec604c4b5d7dd538d37"
+  },
+  {
+    "probe": "GET /chat as none (html)",
+    "status": 303,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["location", "/login?redirect=%2Fchat"],
+      ["referrer-policy", "no-referrer"]
+    ],
+    "length": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "probe": "GET /chat as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "GET /chat as view-cookie (html)",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 45340,
+    "sha256": "4b4e4cfad74761502112cb83ff33d248dac8bb7082fbba1e463a605dc7c9e5ec"
+  },
+  {
+    "probe": "GET /chat as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 62996,
+    "sha256": "20c1852f0ee4bafd82363af5a823dfa0d9f9e842add0e35c88f79e1a6cc22650"
+  },
+  {
+    "probe": "GET /chat?session=session-1 as admin-cookie",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 63626,
+    "sha256": "30b161245ae5da250bb061361c6fac507f8c35418bb4d8fbecc7f9f057597ea4"
+  },
+  {
+    "probe": "GET /v0/chat/targets as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 156,
+    "sha256": "d51a3d553fa7a36730a376c5f0ca03c55bc3a674906edbec4c55c99d4dd2bb8f"
+  },
+  {
+    "probe": "GET /v0/chat/targets as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "GET /v0/chat/sessions as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 188,
+    "sha256": "27a683e68655b48ab3f2dd361dbb1e0ce51a04bfe118c99ff6bcd5c51567a876"
+  },
+  {
+    "probe": "GET /v0/chat/sessions as none",
+    "status": 401,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 130,
+    "sha256": "7363d99205478cda039430e498e9731423c716e7358a9dbd4b464cce9ec6b3f8"
+  },
+  {
+    "probe": "POST /v0/chat/sessions as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 173,
+    "sha256": "9821d8772099c60a930b7666e2a3e7e0830fe3e7a647fa279d5a332c13dfa766"
+  },
+  {
+    "probe": "GET /v0/chat/sessions/session-1 as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 304,
+    "sha256": "19919034289e7290f255e6e465cca6e6ddf052cbb93facbedea5a4c9d46b5e47"
+  },
+  {
+    "probe": "POST /v0/chat/sessions/session-1/messages as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 108,
+    "sha256": "5538552e71958a7323183bd9c929238d1a7c89e129a266dcd63abb32a26f69e7"
+  },
+  {
+    "probe": "POST /v0/chat/sessions/session-1/messages as admin-cookie",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 116,
+    "sha256": "58bec0d6033f21c68b21947dccf3f6e00172eb79da18399779ce70f01f1a444d"
+  },
+  {
+    "probe": "GET /fragments/chat/sessions as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 1145,
+    "sha256": "3f2b2551ad1c2251b4eb9a817c11dc0a3a80401e7560dfc7d3d4b7f51de47cb9"
+  },
+  {
+    "probe": "GET /fragments/chat/thread/session-1 as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "text/html; charset=utf-8"],
+      ["referrer-policy", "no-referrer"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 1421,
+    "sha256": "0b7275bf0c41fc76bc9a9823571fe57904e8e5682dd8c9e803e8961355763c0d"
+  },
+  {
+    "probe": "GET /fragments/chat/sessions as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "GET /v0/chat/stream as admin-bearer",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["connection", "keep-alive"],
+      ["content-type", "text/event-stream; charset=utf-8"],
+      ["x-accel-buffering", "no"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 20,
+    "sha256": "6dfe526bbbc465c928b6512674c51eaf507c4a6039778b62be3012bd8aa55ad8"
+  },
+  {
+    "probe": "GET /v0/chat/stream as admin-query",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["connection", "keep-alive"],
+      ["content-type", "text/event-stream; charset=utf-8"],
+      ["x-accel-buffering", "no"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 20,
+    "sha256": "6dfe526bbbc465c928b6512674c51eaf507c4a6039778b62be3012bd8aa55ad8"
+  },
+  {
+    "probe": "GET /v0/chat/stream as admin-cookie",
+    "status": 200,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["connection", "keep-alive"],
+      ["content-type", "text/event-stream; charset=utf-8"],
+      ["x-accel-buffering", "no"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 20,
+    "sha256": "6dfe526bbbc465c928b6512674c51eaf507c4a6039778b62be3012bd8aa55ad8"
+  },
+  {
+    "probe": "GET /v0/chat/stream as admin-cookie {\"sec-fetch-site\":\"same-site\"}",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 70,
+    "sha256": "a28e256152c7fa652fc2247714fc367b13dca22542d1e3b016684fc6ad356b5f"
+  },
+  {
+    "probe": "GET /v0/chat/stream as view-bearer",
+    "status": 403,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 72,
+    "sha256": "80620d97de200fd1e342c96670f65e83220303729142c8fc18e52cc41fca3ac9"
+  },
+  {
+    "probe": "GET /invite as none",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 64,
+    "sha256": "daf1d86a7e7dc7deabee68ad131f185bf9103f7581bba47268611217548804ae"
+  },
+  {
+    "probe": "POST /invite as none form={\"invite\":\"x\"}",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 64,
+    "sha256": "daf1d86a7e7dc7deabee68ad131f185bf9103f7581bba47268611217548804ae"
+  },
+  {
+    "probe": "GET /v0/accounts as admin-bearer",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 69,
+    "sha256": "336755a84acef1d1579d44bcb538c65d3aa2ff3d26b8ac4ab60987a74c38ba5e"
+  },
+  {
+    "probe": "POST /v0/accounts/invites as admin-bearer",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 77,
+    "sha256": "5bfdb65e9d44cf5644e18d9b86ffd5f7dc98aa1ad77421062ac3ca9a5e698be5"
+  },
+  {
+    "probe": "GET /v0/me as admin-bearer",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 63,
+    "sha256": "711d4caa4f900dfa5256b382864de80321867ec61ee04ae944f569ee0cf85cc4"
+  },
+  {
+    "probe": "GET /nope as admin-bearer",
+    "status": 404,
+    "headers": [
+      ["cache-control", "no-store"],
+      ["content-type", "application/json; charset=utf-8"],
+      ["x-content-type-options", "nosniff"]
+    ],
+    "length": 62,
+    "sha256": "a5de691c2156b6bb7cf5d06bd6fd285d7e408cd0227e300738a856fff227db44"
+  }
+]

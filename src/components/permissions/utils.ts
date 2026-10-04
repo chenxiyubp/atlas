@@ -1,0 +1,28 @@
+import { getHostPlatformForAnalytics } from '../../utils/config/env.js'
+import {
+  type CompletionType,
+  logUnaryEvent,
+} from '../../utils/telemetry/unaryLogging.js'
+import type { ToolUseConfirm } from './PermissionRequest.js'
+
+export function logUnaryPermissionEvent(
+  completion_type: CompletionType,
+  {
+    assistantMessage: {
+      message: { id: message_id },
+    },
+  }: ToolUseConfirm,
+  event: 'accept' | 'reject',
+  hasFeedback?: boolean,
+): void {
+  void logUnaryEvent({
+    completion_type,
+    event,
+    metadata: {
+      language_name: 'none',
+      message_id: message_id!,
+      platform: getHostPlatformForAnalytics(),
+      hasFeedback: hasFeedback ?? false,
+    },
+  })
+}

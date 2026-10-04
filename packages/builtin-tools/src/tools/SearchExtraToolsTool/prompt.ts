@@ -1,0 +1,84 @@
+import type { Tool } from '@open-claude-code/tool-runtime/Tool.js'
+import { CORE_TOOLS } from 'src/constants/tools.js'
+import { isGoalPresent } from 'src/services/goal/goalPresence.js'
+import { GOAL_TOOL_NAME } from '../GoalTool/constants.js'
+
+export { SEARCH_EXTRA_TOOLS_TOOL_NAME } from './constants.js'
+
+import { SEARCH_EXTRA_TOOLS_TOOL_NAME } from './constants.js'
+import { isDeferredToolsDeltaEnabled } from './deferredToolsDelta.js'
+
+const PROMPT_HEAD = `Search for deferred tools by name or keyword. LOW PRIORITY — only use this tool when no core tool can accomplish the task. Core tools are always in your tool list and should be called directly. This tool is for discovering additional capabilities like MCP tools, cron scheduling, worktree management, agent teams, etc.
+
+`
+
+// Same predicate the request builder uses, so the description can never point
+// the model at the wrong carrier. Both sides call deferredToolsDelta.ts; they
+// used to hold hand-copied duplicates with nothing pinning them together.
+function getToolLocationHint(): string {
+  return isDeferredToolsDeltaEnabled()
+    ? 'Deferred tools appear by name in <system-reminder> messages.'
+    : 'Deferred tools appear by name in <available-deferred-tools> messages.'
+}
+
+const PROMPT_TAIL = ` Returns matching tool names.
+
+## Two-step workflow (MUST follow exactly)
+
+Deferred tools CANNOT be called directly. You MUST use this two-step pattern:
+
+Step 1 — Search: Call this tool (SearchExtraTools) to discover the target tool. The response lists the matched deferred tool names.
+
+Step 2 — Execute: Call ExecuteExtraTool with {"tool_name": "<name>", "params": {...}} to run the discovered tool and get the actual result.
+
+If you don't know the exact tool name, use keyword search first, then execute the best match.
+
+## Query forms
+- "select:CronCreate" — exact tool name (fastest, preferred when the name was already announced to you)
+- "select:CronCreate,CronList" — comma-separated multi-select
+- "discover:schedule cron job" — returns tool name + description + schema without loading. Use to understand a tool before calling it.
+- "notebook jupyter" — keyword search, up to max_results best matches
+- "+slack send" — require "slack" in the name, rank by remaining terms
+
+## Failure policy
+If ExecuteExtraTool fails, do NOT re-search for the same tool — it will loop. Stop and tell the user what failed.`
+
+/**
+ * Check if a tool should be deferred (requires SearchExtraTools to load).
+ * A tool is deferred if it is NOT in CORE_TOOLS and does NOT have alwaysLoad: true.
+ * Core tools are always loaded — never deferred.
+ * All other tools (non-core built-in + all MCP tools) are deferred
+ * and must be discovered via SearchExtraToolsTool / ExecuteExtraTool.
+ */
+export function isDeferredTool(tool: Tool): boolean {
+  // Explicit opt-out via _meta['anthropic/alwaysLoad']
+  if (tool.alwaysLoad === true) return false
+
+  // Core tools are always loaded — never deferred
+  if (CORE_TOOLS.has(tool.name)) return false
+
+  // GoalTool is deferred only while no goal exists. Once one is set, every
+  // <goal-steering> turn instructs the model to "use the GoalTool to mark it
+  // complete" — leaving it behind a SearchExtraTools round-trip means the
+  // model is told to call a tool it cannot see, so the goal can never reach a
+  // terminal state and the loop runs to the turn cap instead of finishing.
+  // Deliberately dynamic rather than a CORE_TOOLS entry: sessions without a
+  // goal (the overwhelming majority) shouldn't pay for the schema.
+  if (tool.name === GOAL_TOOL_NAME) return !isGoalPresent()
+
+  // Everything else (non-core built-in + all MCP tools) is deferred
+  return true
+}
+
+/**
+ * Format one deferred-tool line for the <available-deferred-tools> user
+ * message. Search hints (tool.searchHint) are not rendered — the
+ * hints A/B (exp_xenhnnmn0smrx4, stopped Mar 21) showed no benefit.
+ */
+export function formatDeferredToolLine(tool: Tool): string {
+  return tool.name
+}
+
+export function getPrompt(): string {
+  return PROMPT_HEAD + getToolLocationHint() + PROMPT_TAIL
+}

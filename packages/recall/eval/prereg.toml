@@ -1,0 +1,91 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 记忆评测的预注册值：docs/dev/memory-m1.md §9 的「预注册表」与 D-1 定案。
+#
+# 规矩
+# - 执行器与判定只从这个文件读，不接受命令行覆盖，代码里也没有默认值。
+# - 键不写，就是「未生成」。用到它的判定会直接报错，不会拿一个猜的值顶上。
+# - 设计里写明了的值照抄，并在行尾注明出处。
+# - 设计写「值随冻结写入」的键先留空，由冻结提交填入。冻结提交必须早于 P16.6
+#   的第一个调参提交，用 git log 的先后顺序核对。
+
+[retrieval]
+# R3 / R4 的单侧 α。出处：§9 预注册表「主终点 α：各 0.025，单侧」。
+alpha_primary = 0.025
+# R3 / R4 符号检验在留出集上的计数单位："question" 或 "gold"。
+# 已裁定取 "gold"（主 agent 2026-09-27 对 P16.3 追加回报的裁定第 1 条）。这个值与
+# heldout_ids_sha256 在同一个冻结提交里写入：冻结脚本在留出集交付且校验通过之前不填它。
+# 缺这一项时 R2–R4 拒判。
+# 定义（retrieval-gates.ts 的 signGate）：
+# - 每道题的配对差 d = [M1 注入了 gold] − [M0 注入了 gold]，取值 −1 / 0 / +1。
+#   R4 把 M0 换成打乱对照臂（π 见 [corpus] shuffle_seed）。
+# - "gold"：一条 gold 的配对差 = 这条 gold 下各题 d 的均值，平局的题也计入分母。
+#   "question"：每道题的 d 就是一个单位的配对差。
+# - 配对差 > 0 记一胜，< 0 记一负，= 0 的单位剔除，不计入样本数 n。
+# - 对胜、负数做精确单侧符号检验，p < alpha_primary 即该种子通过。
+# - 种子：只看 2000 档；每个种子（语料的全部 5 个）各自检验一次，不合并、不挑选；
+#   所有种子都通过才算 R3（R4）通过。
+# 选 "gold" 的依据：留出集每条 gold 有 2 道题，按题计会把同一条 gold 算两次。一个完全
+# 不看题面的排序器按题计在 5 个种子上都能通过 R3，按 gold 计全部被拦下（heldout.test.ts
+# 的裁定证据用例）。开发集每条 gold 只有 1 道题，两种口径结果相同。
+sign_test_unit = "gold"
+
+[answer]
+# E1 的单侧 α。出处同上。
+alpha_primary = 0.025
+# E2 的非劣效界 δ（比例，0.05 = 5 个百分点）。出处：§9 预注册表。
+noninferiority_delta = 0.05
+# A0 的 A/A 有效性检查：两臂配对检验 p 小于这个值，整轮作废。出处：§9 D-1 A0。
+aa_alpha = 0.05
+# A2 的按题聚类自助法次数。出处：§9 预注册表「1 万次」。
+bootstrap_iterations = 10000
+# §9：「固定种子（值随冻结写入）」。冻结值见 m1-design-rulings.md
+# 「P16.3 回答层口径裁定」第 9 条，由 scripts/qianmo-recall-freeze.ts 写入。
+bootstrap_seed = 20260927
+# A2 写的是「自助法或精确符号翻转置换」，冻结时二选一：
+# "bootstrap" 或 "signflip"，裁定取后者（同上第 9 条）。E2 的上界只能用自助法算，不受这一项影响。
+e1_inference = "signflip"
+
+[corpus]
+# 以下由 scripts/qianmo-recall-freeze.ts 重算并写入；--check 只核对不写，用来确认冻结后语料与基线没有变。
+# 加固合成语料 synthetic-v1 的哈希：bun run qianmo:recall-baseline --corpus synthetic-v1 --digest
+synthetic_v1_sha256 = "7ddd7e783a587521067e928e4aa8781f50dd529a75af4bafafe2c6830e2e38d1"
+# docs/dev 第二语料 docs-dev-v1 的哈希：bun run qianmo:recall-baseline --corpus docs-dev-v1 --digest
+docs_dev_v1_sha256 = "d75ffac175e27debe33257ef03dbd5f256b055ae94a4ed4abd05fd3884354d0b"
+# 留出改写题集 id 列表的哈希（eval/heldout.ts 的 heldoutDigest），题集文件是
+# eval/heldout/synthetic-v1.heldout.toml，40 道，每条 gold 2 道。缺这一项时 R2–R4 拒判。
+# 出处：由未接触检索实现的独立代理撰写；主 agent 审计其工具调用仅限作者包与校验器。2026-09-27 交稿。
+heldout_ids_sha256 = "a70557a550b5b4c6cf2b0df319b517da29ea1c33343b896cd7bf5024102749e6"
+# 打乱排列 π 的种子。π = derangement(留出集 id, shuffle_seed)。
+shuffle_seed = 20261003
+# 加固语料上 M0 基线 JSON 输出的 SHA-256，即下面这条命令写出的文件：
+# bun run qianmo:recall-baseline --corpus synthetic-v1 --decay default,off --json <path>
+m0_baseline_sha256 = "4bbb543c7971754c77e7de42b887a93f26c7074f07e522adde7410052826f2da"
+
+[plan]
+# P16.12 的对比计划。出处：m1-design-rulings.md「P16.3 回答层口径裁定」第 1–4 条。
+# 执行器的 comparison 只接受这一份，命令行不能改，代码里也不缩。
+# 每题每家 1 次是对 §4 与 A2「3 次」的有记录偏离（裁定第 1 条）。
+# 回答层题集：synthetic-v1 每档 40 道正例 + 61 道负例，batch 变体只进检索层（裁定第 2 条）。
+# 合计 (101 × 3 + 62) × 2 臂 × 2 家 × 1 次 = 1 460 次调用。
+arms = ["m0", "m1"]
+repetitions = 1
+providers = ["qianmo-deepseek", "qianmo-alt"]
+# 回答层只跑各语料的第一个种子（裁定第 4 条）。
+seed = 20260926
+synthetic_v1_tiers = [30, 500, 2000]
+docs_dev_v1_tiers = [599]
+# E1、E2、A0、A4 判定所用的语料；docs 语料只进 A5 次要比较（裁定第 3 条）。
+primary_corpus = "synthetic-v1"
+
+[trial]
+# P16.4 试跑的默认计划（裁定第 8 条），不是判定用的值：试跑数字不参与出口判定（A1），
+# 命令行可以在试跑里缩小它。101 道 × 2 家 × 1 次 = 202 次调用，受总上限 1/10 的子上限约束。
+arms = ["m0"]
+repetitions = 1
+providers = ["qianmo-deepseek", "qianmo-alt"]
+seed = 20260926
+synthetic_v1_tiers = [30]
+docs_dev_v1_tiers = []
+primary_corpus = "synthetic-v1"

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "qianmo-deepseek",
+    "kind": "openai-compat",
+    "baseUrl": "https://api.cornna.xyz/v1",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "defaultModel": "deepseek-v4-pro",
+    "compatRule": "deepseek"
+  },
+  {
+    "id": "qianmo-alt",
+    "kind": "openai-compat",
+    "baseUrl": "https://api.cornna.xyz/v1",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "defaultModel": "kimi-k3",
+    "compatRule": "strict-openai"
+  }
+]

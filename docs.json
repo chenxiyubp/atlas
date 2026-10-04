@@ -1,0 +1,193 @@
+{
+  "$schema": "https://mintlify.com/docs.json",
+  "theme": "mint",
+  "name": "Open Claude Code",
+  "colors": {
+    "primary": "#D77757",
+    "light": "#D77757",
+    "dark": "#D77757"
+  },
+  "favicon": "/docs/favicon.svg",
+  "navigation": {
+    "languages": [
+      {
+        "language": "zh",
+        "default": true,
+        "groups": [
+          {
+            "group": "开始",
+            "pages": [
+              {
+                "group": "介绍",
+                "pages": [
+                  "docs/zh/introduction/what-is-claude-code",
+                  "docs/zh/introduction/why-this-whitepaper",
+                  "docs/zh/introduction/architecture-overview"
+                ]
+              }
+            ]
+          },
+          {
+            "group": "对话是如何运转的",
+            "pages": [
+              "docs/zh/conversation/the-loop",
+              "docs/zh/conversation/streaming",
+              "docs/zh/conversation/multi-turn"
+            ]
+          },
+          {
+            "group": "工具：AI 的双手",
+            "pages": [
+              "docs/zh/tools/what-are-tools",
+              "docs/zh/tools/file-operations",
+              "docs/zh/tools/shell-execution",
+              "docs/zh/tools/search-and-navigation",
+              "docs/zh/tools/task-management"
+            ]
+          },
+          {
+            "group": "上下文工程",
+            "pages": [
+              "docs/zh/context/system-prompt",
+              "docs/zh/context/project-memory",
+              "docs/zh/context/compaction",
+              "docs/zh/context/token-budget"
+            ]
+          },
+          {
+            "group": "多 Agent 协作",
+            "pages": [
+              "docs/zh/agent/sub-agents",
+              "docs/zh/agent/worktree-isolation",
+              "docs/zh/agent/coordinator-and-swarm"
+            ]
+          },
+          {
+            "group": "可扩展性",
+            "pages": [
+              "docs/zh/extensibility/mcp-protocol",
+              "docs/zh/extensibility/mcp-configuration",
+              "docs/zh/extensibility/hooks",
+              "docs/zh/extensibility/skills",
+              "docs/zh/extensibility/custom-agents"
+            ]
+          },
+          {
+            "group": "安全与权限",
+            "pages": [
+              "docs/zh/safety/why-safety-matters",
+              "docs/zh/safety/permission-model",
+              "docs/zh/safety/sandbox",
+              "docs/zh/safety/plan-mode",
+              "docs/zh/safety/auto-mode",
+              "docs/zh/safety/miit-warning-response"
+            ]
+          },
+          {
+            "group": "揭秘：隐藏功能与内部机制",
+            "pages": [
+              "docs/zh/internals/three-tier-gating",
+              "docs/zh/internals/feature-flags",
+              "docs/zh/internals/growthbook-ab-testing",
+              "docs/zh/internals/growthbook-adapter",
+              "docs/zh/internals/sentry-setup",
+              "docs/zh/internals/hidden-features",
+              "docs/zh/internals/ant-only-world",
+              "docs/zh/internals/session-transcript-persistence",
+              "docs/zh/features/debug-mode"
+            ]
+          },
+          {
+            "group": "隐藏功能详解",
+            "pages": [
+              {
+                "group": "Agent 与协作",
+                "pages": [
+                  "docs/zh/features/coordinator-mode",
+                  "docs/zh/features/fork-subagent",
+                  "docs/zh/features/daemon"
+                ]
+              },
+              {
+                "group": "运行模式",
+                "pages": [
+                  "docs/zh/features/kairos",
+                  "docs/zh/features/channels",
+                  "docs/zh/features/voice-mode",
+                  "docs/zh/features/remote-control-self-hosting",
+                  "docs/zh/features/proactive",
+                  "docs/zh/features/ultraplan"
+                ]
+              },
+              {
+                "group": "工具增强",
+                "pages": [
+                  "docs/zh/features/mcp-skills",
+                  "docs/zh/features/mcp-2026",
+                  "docs/zh/features/tree-sitter-bash",
+                  "docs/zh/features/bash-classifier",
+                  "docs/zh/features/web-browser-tool",
+                  "docs/zh/features/web-search-tool",
+                  "docs/zh/features/experimental-skill-search",
+                  "docs/zh/features/langfuse-monitoring",
+                  "docs/zh/features/computer-use"
+                ]
+              },
+              {
+                "group": "上下文与自动化",
+                "pages": [
+                  "docs/zh/features/token-budget",
+                  "docs/zh/features/workflow-scripts",
+                  "docs/zh/features/auto-dream"
+                ]
+              },
+              "docs/zh/features/tier3-stubs"
+            ]
+          },
+          {
+            "group": "基础设施与依赖",
+            "pages": [
+              "docs/zh/auto-updater",
+              "docs/zh/lsp-integration",
+              "docs/zh/external-dependencies",
+              "docs/zh/telemetry-remote-config-audit"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "logo": {
+    "light": "/docs/logo/light.svg",
+    "dark": "/docs/logo/dark.svg"
+  },
+  "background": {
+    "color": {
+      "light": "#FFFDFB",
+      "dark": "#1C1917"
+    }
+  },
+  "navbar": {
+    "primary": {
+      "type": "github",
+      "href": "https://github.com/sweetcornna/open-claude-code"
+    }
+  },
+  "search": {
+    "prompt": "搜索 Open Claude Code 文档..."
+  },
+  "seo": {
+    "indexing": "navigable"
+  },
+  "footer": {
+    "socials": {
+      "github": "https://github.com/sweetcornna/open-claude-code"
+    }
+  },
+  "redirects": [
+    {
+      "source": "/docs/introduction",
+      "destination": "/docs/introduction/what-is-claude-code"
+    }
+  ]
+}

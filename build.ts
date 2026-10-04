@@ -1,0 +1,108 @@
+import { readdir, readFile, writeFile, cp } from 'fs/promises'
+import { join } from 'path'
+import { getMacroDefines, resolveBuildFeatures } from './scripts/defines.ts'
+import { writeDemoBundles } from './scripts/demoBundles.ts'
+import { writeEntrypoints } from './scripts/entrypoints.ts'
+
+const outdir = 'dist'
+
+// Step 1: Clean output directory
+const { rmSync } = await import('fs')
+rmSync(outdir, { recursive: true, force: true })
+
+// Resolve defaults and FEATURE_* overrides with the same value semantics as dev/Vite.
+const features = [...resolveBuildFeatures()]
+
+// Step 2: Bundle with splitting
+const result = await Bun.build({
+  entrypoints: ['src/entrypoints/cli.tsx'],
+  outdir,
+  target: 'bun',
+  splitting: true,
+  sourcemap: 'linked',
+  define: {
+    ...getMacroDefines(),
+    // React production mode — eliminates _debugStack Error objects
+    // (6,889 objects × ~1.7KB = 12MB in development builds) and removes
+    // prop-type / key warnings not useful in a production CLI tool.
+    'process.env.NODE_ENV': JSON.stringify('production'),
+  },
+  features,
+})
+
+if (!result.success) {
+  console.error('Build failed:')
+  for (const log of result.logs) {
+    console.error(log)
+  }
+  process.exit(1)
+}
+
+// Step 3: Post-process — replace Bun-only `import.meta.require` with Node.js compatible version
+const files = await readdir(outdir)
+const IMPORT_META_REQUIRE = 'var __require = import.meta.require;'
+const COMPAT_REQUIRE = `var __require = typeof import.meta.require === "function" ? import.meta.require : (await import("module")).createRequire(import.meta.url);`
+
+let patched = 0
+for (const file of files) {
+  if (!file.endsWith('.js')) continue
+  const filePath = join(outdir, file)
+  const content = await readFile(filePath, 'utf-8')
+  if (content.includes(IMPORT_META_REQUIRE)) {
+    await writeFile(
+      filePath,
+      content.replace(IMPORT_META_REQUIRE, COMPAT_REQUIRE),
+    )
+    patched++
+  }
+}
+
+// Also patch unguarded globalThis.Bun destructuring from third-party deps
+// (e.g. @anthropic-ai/sandbox-runtime) so Node.js doesn't crash at import time.
+let bunPatched = 0
+const BUN_DESTRUCTURE = /var \{([^}]+)\} = globalThis\.Bun;?/g
+const BUN_DESTRUCTURE_SAFE =
+  'var {$1} = typeof globalThis.Bun !== "undefined" ? globalThis.Bun : {};'
+for (const file of files) {
+  if (!file.endsWith('.js')) continue
+  const filePath = join(outdir, file)
+  const content = await readFile(filePath, 'utf-8')
+  if (BUN_DESTRUCTURE.test(content)) {
+    await writeFile(
+      filePath,
+      content.replace(BUN_DESTRUCTURE, BUN_DESTRUCTURE_SAFE),
+    )
+    bunPatched++
+  }
+}
+BUN_DESTRUCTURE.lastIndex = 0
+
+console.log(
+  `Bundled ${result.outputs.length} files to ${outdir}/ (patched ${patched} for import.meta.require, ${bunPatched} for Bun destructure)`,
+)
+
+// Step 4: Copy native .node addon files (audio-capture) and vendored binaries (ripgrep)
+const audioCaptureDir = join(outdir, 'vendor', 'audio-capture')
+await cp('vendor/audio-capture', audioCaptureDir, { recursive: true })
+console.log(`Copied vendor/audio-capture/ → ${audioCaptureDir}/`)
+
+const ripgrepDir = join(outdir, 'vendor', 'ripgrep')
+await cp('src/utils/vendor/ripgrep', ripgrepDir, { recursive: true })
+console.log(`Copied src/utils/vendor/ripgrep/ → ${ripgrepDir}/`)
+
+// Step 5: Bundle the runtime-farm bootstrap and generate the cli-bun /
+// cli-node / cli-qianmo entry points that enter it. Shared with
+// scripts/post-build.ts so the two builders cannot emit different
+// entrypoints — see scripts/entrypoints.ts.
+// 舰队投递载荷是 dist + demo，没有 node_modules —— demo/lib 里被 shell 调起的那几个
+// 入口必须以自包含产物的形式随 dist 一起走（scripts/demoBundles.ts 有实测记录）。
+const demoBundles = await writeDemoBundles(outdir)
+console.log(
+  `Bundled ${demoBundles} demo entry points to ${join(outdir, 'demo')}/`,
+)
+
+const version = await writeEntrypoints(outdir)
+
+console.log(
+  `Generated ${join(outdir, 'cli-bun.js')} (shebang: bun), ${join(outdir, 'cli-node.js')} (shebang: node) and ${join(outdir, 'cli-qianmo.js')} (shebang: bun, identity-pinned) for v${version}`,
+)

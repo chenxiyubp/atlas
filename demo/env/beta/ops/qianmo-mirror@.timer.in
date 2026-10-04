@@ -1,0 +1,19 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 节点 %i 的审计镜像定时器。**这是模板**，见 qianmo-tunnel@.service.in 头注。
+#
+# 间隔由 QIANMO_BETA_MIRROR_INTERVAL_MIN 定（默认 5 min）；H 腿把同一个数传成镜像来源
+# 元数据，控制台在每张镜像来源卡片显示「滞后 ≤ N min」。
+
+[Unit]
+Description=Qianmo beta audit-trail mirror timer for node %i
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=@MIRROR_INTERVAL_MIN@min
+AccuracySec=30s
+Unit=qianmo-mirror@%i.service
+
+[Install]
+WantedBy=timers.target

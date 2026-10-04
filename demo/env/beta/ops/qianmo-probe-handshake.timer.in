@@ -1,0 +1,16 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · 探针定时器（handshake）：每 5 分钟一次：按名解析 + 真 PSK 握手（不发任务）。
+# 由 fleet-probe.sh install 装、只 enable 不 start——开始计时是一个有意的动作。
+
+[Unit]
+Description=Qianmo beta fleet probe timer (handshake)
+
+[Timer]
+OnCalendar=*-*-* *:0/5:30
+AccuracySec=1s
+Unit=qianmo-probe@handshake.service
+
+[Install]
+WantedBy=timers.target

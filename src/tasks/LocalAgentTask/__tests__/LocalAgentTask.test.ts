@@ -1,0 +1,833 @@
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  mock,
+  test,
+} from 'bun:test'
+import { stateMockWith } from '../../../../tests/mocks/state.js'
+import { setupAnalyticsMock } from '../../../../tests/mocks/analytics.js'
+import { setupCleanupRegistryMock } from '../../../../tests/mocks/cleanupRegistry.js'
+import { debugMock } from '../../../../tests/mocks/debug.js'
+import { logMock } from '../../../../tests/mocks/log.js'
+import { setupMessageQueueManagerMock } from '../../../../tests/mocks/messageQueueManager.js'
+import { setupSessionStorageMock } from '../../../../tests/mocks/sessionStorage.js'
+import { setupTaskDiskOutputMock } from '../../../../tests/mocks/taskDiskOutput.js'
+import { setupSdkProgressMock } from '../../../../tests/mocks/sdkProgress.js'
+import { setupSpeculationMock } from '../../../../tests/mocks/speculation.js'
+
+// ─── Mocks ───
+//
+// The four shared mocks below are complete-surface. They used to be
+// hand-written partial ones (4 / 4 / 1 / 6 exports); because Bun's mock.module
+// is process-global and last-write-wins, those erased ~60 / 12 / 23 other
+// exports for every file loaded later in the same process — co-running this
+// file with src/components/tasks/*.test.tsx died on
+// "Export named 'getTranscriptPathForSession' not found".
+//
+// Timing follows the documented pattern: setup() installs the all-real
+// delegating surface at module load, overrides are installed in beforeAll and
+// dropped in afterAll, so they apply to THIS file's tests and no one else's.
+// Delegation resolves at call time, so importing the module under test before
+// beforeAll runs is safe.
+
+const noop = () => {}
+
+mock.module('src/utils/telemetry/debug.ts', debugMock)
+mock.module('src/utils/telemetry/log.ts', logMock)
+
+const sessionStorageMock = setupSessionStorageMock()
+const diskOutputMock = setupTaskDiskOutputMock()
+const messageQueueManagerMock = setupMessageQueueManagerMock()
+// The real analytics module is an inert no-op shell, so no overrides needed —
+// this exists purely to stop a hand-rolled partial surface from drifting.
+const analyticsMock = setupAnalyticsMock()
+
+// Capture enqueuePendingNotification calls for verification
+const enqueuedNotifications: string[] = []
+const enqueuedCommands: any[] = []
+
+beforeAll(() => {
+  sessionStorageMock.set({
+    getAgentTranscriptPath: (id: string) => `/tmp/transcripts/${id}.jsonl`,
+    recordSidechainTranscript: async () => {},
+    recordQueueOperation: async () => {},
+    writeAgentMetadata: async () => {},
+  })
+  diskOutputMock.set({
+    evictTaskOutput: async () => {},
+    getTaskOutputPath: (id: string) => `/tmp/output/${id}`,
+    initTaskOutputAsSymlink: async () => '',
+    getTaskOutputDelta: async () => ({ content: '', newOffset: 0 }),
+  })
+  messageQueueManagerMock.set({
+    enqueuePendingNotification: (cmd: any) => {
+      enqueuedNotifications.push(cmd.value)
+      enqueuedCommands.push(cmd)
+    },
+  })
+})
+
+afterAll(() => {
+  sessionStorageMock.reset()
+  diskOutputMock.reset()
+  messageQueueManagerMock.reset()
+  cleanupRegistryMock.reset()
+  analyticsMock.reset()
+})
+
+// speculation via the shared complete-surface mock — abortSpeculation is the
+// only export this file needs neutralised (the fake app state here has no
+// `speculation` slice), and the rest keep delegating to the real module.
+const speculationMock = setupSpeculationMock({ abortSpeculation: noop })
+afterAll(() => speculationMock.reset())
+
+mock.module(
+  'src/bootstrap/state.ts',
+  stateMockWith({
+    getSdkAgentProgressSummariesEnabled: () => false,
+    getSessionId: () => 'test-session-001',
+    getProjectRoot: () => '/test/project',
+    getIsNonInteractiveSession: () => false,
+    addSlowOperation: noop,
+  }),
+)
+
+// Complete-surface, like the four above. The hand-written partial version of
+// this one erased `runCleanupFunctions` for every file loaded afterwards.
+// Cleanups are dropped on the floor here so this file's tasks don't leave
+// entries in the process-global registry for later suites to run.
+const cleanupRegistryMock = setupCleanupRegistryMock({
+  registerCleanup: () => noop,
+})
+
+const sdkProgressMock = setupSdkProgressMock({
+  emitTaskProgress: noop,
+})
+afterAll(() => sdkProgressMock.reset())
+
+// src/constants/xml.js is deliberately NOT mocked. It is a pure data module
+// (CLAUDE.md: don't mock those), its old 10-key partial surface broke every
+// later import of the other tags in the same process, and its snake_case stubs
+// didn't even match the real kebab-case wire format — so the assertions below
+// were pinning a shape production never emits.
+//
+// Three more mocks were dropped for the same reason (suite stays green without
+// them, and each was a partial surface installed process-wide):
+//   abortController.js  — pure, no I/O; the stub even re-implemented
+//                         createChildAbortController without the WeakRef the
+//                         real one uses to avoid retaining abandoned children.
+//   sdkEventQueue.js    — real enqueueSdkEvent already returns early outside
+//                         non-interactive sessions, so the no-op added nothing
+//                         while erasing drainSdkEvents/emitTaskTerminatedSdk.
+//   collapseReadSearch.js — pure message analysis; the stub pinned one of its
+//                         nine exports and erased the rest.
+
+// ─── Import after mocks ───
+
+const {
+  backgroundAgentTask,
+  createProgressTracker,
+  updateProgressFromMessage,
+  getProgressUpdate,
+  completeAgentTask,
+  failAgentTask,
+  killAsyncAgent,
+  enqueueAgentNotification,
+  registerAgentForeground,
+  registerAsyncAgent,
+  updateAgentProgress,
+  updateAgentSummary,
+  isLocalAgentTask,
+  unregisterAgentForeground,
+} = await import('../LocalAgentTask.js')
+
+// ─── Helpers ───
+
+type AppStateLike = { tasks: Record<string, any> }
+type SetAppStateLike = (f: (prev: AppStateLike) => AppStateLike) => void
+
+function createSetAppState(initial: AppStateLike = { tasks: {} }): {
+  setAppState: SetAppStateLike
+  getState: () => AppStateLike
+} {
+  let state = initial
+  return {
+    setAppState: f => {
+      state = f(state)
+    },
+    getState: () => state,
+  }
+}
+
+function makeRunningTask(overrides: Record<string, any> = {}): any {
+  return {
+    id: 'test-agent-001',
+    type: 'local_agent',
+    status: 'running',
+    description: 'Test agent',
+    agentId: 'test-agent-001',
+    prompt: 'do something',
+    agentType: 'general-purpose',
+    abortController: new AbortController(),
+    retrieved: false,
+    lastReportedToolCount: 0,
+    lastReportedTokenCount: 0,
+    isBackgrounded: true,
+    pendingMessages: [],
+    retain: false,
+    diskLoaded: false,
+    notified: false,
+    startTime: Date.now(),
+    outputFile: '/tmp/output/test-agent-001',
+    outputOffset: 0,
+    ...overrides,
+  }
+}
+
+function makeAssistantMessage(usage: any, content: any[] = []): any {
+  return {
+    type: 'assistant',
+    message: {
+      usage,
+      content,
+    },
+  }
+}
+
+afterEach(() => {
+  enqueuedNotifications.length = 0
+  enqueuedCommands.length = 0
+})
+
+// ─── Tests ───
+
+describe('createProgressTracker', () => {
+  test('returns initial state with zero counts', () => {
+    const tracker = createProgressTracker()
+    expect(tracker.toolUseCount).toBe(0)
+    expect(tracker.latestInputTokens).toBe(0)
+    expect(tracker.cumulativeOutputTokens).toBe(0)
+    expect(tracker.recentActivities).toEqual([])
+  })
+})
+
+describe('updateProgressFromMessage', () => {
+  test('skips non-assistant messages', () => {
+    const tracker = createProgressTracker()
+    updateProgressFromMessage(tracker, { type: 'user', message: {} } as any)
+    expect(tracker.toolUseCount).toBe(0)
+    expect(tracker.latestInputTokens).toBe(0)
+  })
+
+  test('updates token counts from assistant message usage', () => {
+    const tracker = createProgressTracker()
+    const msg = makeAssistantMessage({
+      input_tokens: 100,
+      output_tokens: 50,
+      cache_creation_input_tokens: 20,
+      cache_read_input_tokens: 30,
+    })
+    updateProgressFromMessage(tracker, msg)
+    expect(tracker.latestInputTokens).toBe(150) // 100 + 20 + 30
+    expect(tracker.cumulativeOutputTokens).toBe(50)
+  })
+
+  /**
+   * One API response becomes several AssistantMessage records (one per
+   * content_block_stop), and claude.ts backfills the response's usage onto
+   * every one of them. Before that backfill only the last record carried a
+   * non-zero output_tokens, so a naive sum happened to be right; afterwards a
+   * thinking+text+tool_use turn would report 3x its real output. Siblings
+   * share message.id, which is what makes "once per response" decidable here.
+   */
+  test('counts one API response once, however many records it was split into', () => {
+    const tracker = createProgressTracker()
+    const split = () => {
+      const msg = makeAssistantMessage({
+        input_tokens: 100,
+        output_tokens: 50,
+        cache_creation_input_tokens: 20,
+        cache_read_input_tokens: 30,
+      })
+      msg.message.id = 'msg_split'
+      return msg
+    }
+
+    updateProgressFromMessage(tracker, split())
+    updateProgressFromMessage(tracker, split())
+    updateProgressFromMessage(tracker, split())
+
+    expect(tracker.cumulativeOutputTokens).toBe(50)
+    expect(tracker.latestInputTokens).toBe(150)
+  })
+
+  test('still sums across distinct API responses', () => {
+    const tracker = createProgressTracker()
+    const response = (id: string, output: number) => {
+      const msg = makeAssistantMessage({
+        input_tokens: 10,
+        output_tokens: output,
+      })
+      msg.message.id = id
+      return msg
+    }
+
+    updateProgressFromMessage(tracker, response('msg_a', 40))
+    updateProgressFromMessage(tracker, response('msg_b', 25))
+
+    expect(tracker.cumulativeOutputTokens).toBe(65)
+  })
+
+  test('records without an id are still counted', () => {
+    const tracker = createProgressTracker()
+    updateProgressFromMessage(
+      tracker,
+      makeAssistantMessage({ input_tokens: 1, output_tokens: 7 }),
+    )
+    updateProgressFromMessage(
+      tracker,
+      makeAssistantMessage({ input_tokens: 1, output_tokens: 7 }),
+    )
+    expect(tracker.cumulativeOutputTokens).toBe(14)
+  })
+
+  test('counts tool_use blocks and tracks recent activities', () => {
+    const tracker = createProgressTracker()
+    const msg = makeAssistantMessage({ input_tokens: 0, output_tokens: 0 }, [
+      { type: 'tool_use', name: 'Read', input: { file_path: '/foo.ts' } },
+      { type: 'text', text: 'thinking...' },
+      { type: 'tool_use', name: 'Write', input: { file_path: '/bar.ts' } },
+    ])
+    updateProgressFromMessage(tracker, msg)
+    expect(tracker.toolUseCount).toBe(2)
+    expect(tracker.recentActivities).toHaveLength(2)
+    expect(tracker.recentActivities[0]!.toolName).toBe('Read')
+    expect(tracker.recentActivities[1]!.toolName).toBe('Write')
+  })
+
+  test('caps recentActivities at 5', () => {
+    const tracker = createProgressTracker()
+    for (let i = 0; i < 7; i++) {
+      const msg = makeAssistantMessage({ input_tokens: 0, output_tokens: 0 }, [
+        { type: 'tool_use', name: `Tool${i}`, input: {} },
+      ])
+      updateProgressFromMessage(tracker, msg)
+    }
+    expect(tracker.recentActivities).toHaveLength(5)
+  })
+
+  test('skips without usage', () => {
+    const tracker = createProgressTracker()
+    const msg = makeAssistantMessage(null)
+    updateProgressFromMessage(tracker, msg)
+    expect(tracker.latestInputTokens).toBe(0)
+  })
+})
+
+describe('getProgressUpdate', () => {
+  test('returns correct progress snapshot', () => {
+    const tracker = createProgressTracker()
+    tracker.toolUseCount = 3
+    tracker.latestInputTokens = 100
+    tracker.cumulativeOutputTokens = 50
+    tracker.recentActivities.push({ toolName: 'Read', input: {} })
+
+    const progress = getProgressUpdate(tracker)
+    expect(progress.toolUseCount).toBe(3)
+    expect(progress.tokenCount).toBe(150)
+    expect(progress.lastActivity).toBeDefined()
+    expect(progress.lastActivity!.toolName).toBe('Read')
+  })
+
+  test('returns undefined lastActivity when no activities', () => {
+    const tracker = createProgressTracker()
+    const progress = getProgressUpdate(tracker)
+    expect(progress.lastActivity).toBeUndefined()
+  })
+})
+
+describe('completeAgentTask', () => {
+  test('transitions running task to completed', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask() },
+    })
+
+    completeAgentTask(
+      {
+        agentId: 'test-agent-001',
+        content: [],
+        totalToolUseCount: 0,
+        totalDurationMs: 100,
+      } as any,
+      setAppState as any,
+    )
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.status).toBe('completed')
+    expect(task.endTime).toBeDefined()
+    expect(task.evictAfter).toBeDefined()
+  })
+
+  test('no-op if task not running', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ status: 'completed' }) },
+    })
+
+    completeAgentTask(
+      {
+        agentId: 'test-agent-001',
+        content: [],
+        totalToolUseCount: 0,
+        totalDurationMs: 100,
+      } as any,
+      setAppState as any,
+    )
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.status).toBe('completed')
+  })
+})
+
+describe('failAgentTask', () => {
+  test('transitions running task to failed with error message', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask() },
+    })
+
+    failAgentTask('test-agent-001', 'Stream idle timeout', setAppState as any)
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.status).toBe('failed')
+    expect(task.error).toBe('Stream idle timeout')
+    expect(task.endTime).toBeDefined()
+  })
+
+  test('no-op if task not running', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ status: 'killed' }) },
+    })
+
+    failAgentTask('test-agent-001', 'error', setAppState as any)
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.status).toBe('killed')
+    expect(task.error).toBeUndefined()
+  })
+})
+
+describe('killAsyncAgent', () => {
+  test('transitions running task to killed', () => {
+    const ac = new AbortController()
+    const cleanup = mock(() => {})
+    const { setAppState, getState } = createSetAppState({
+      tasks: {
+        'test-agent-001': makeRunningTask({
+          abortController: ac,
+          unregisterCleanup: cleanup,
+        }),
+      },
+    })
+
+    killAsyncAgent('test-agent-001', setAppState as any)
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.status).toBe('killed')
+    expect(ac.signal.aborted).toBe(true)
+    expect(cleanup).toHaveBeenCalled()
+    expect(task.abortController).toBeUndefined()
+  })
+
+  test('no-op if task not running', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ status: 'completed' }) },
+    })
+
+    killAsyncAgent('test-agent-001', setAppState as any)
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.status).toBe('completed')
+  })
+})
+
+describe('enqueueAgentNotification', () => {
+  test('enqueues completed notification with correct XML format', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: false }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'refactor auth',
+      status: 'completed',
+      setAppState: setAppState as any,
+      finalMessage: 'Done!',
+      usage: { totalTokens: 5000, toolUses: 3, durationMs: 10000 },
+    })
+
+    expect(enqueuedNotifications).toHaveLength(1)
+    expect(enqueuedNotifications[0]).toContain('<task-notification>')
+    expect(enqueuedNotifications[0]).toContain(
+      '<task-id>test-agent-001</task-id>',
+    )
+    expect(enqueuedNotifications[0]).toContain('<status>completed</status>')
+    expect(enqueuedNotifications[0]).toContain(
+      'Agent "refactor auth" completed',
+    )
+    expect(enqueuedNotifications[0]).toContain('<result>Done!</result>')
+    expect(enqueuedNotifications[0]).toContain(
+      '<total_tokens>5000</total_tokens>',
+    )
+  })
+
+  test('enqueues failed notification with error', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: false }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'failed',
+      error: 'Stream idle timeout',
+      setAppState: setAppState as any,
+    })
+
+    expect(enqueuedNotifications).toHaveLength(1)
+    expect(enqueuedNotifications[0]).toContain('<status>failed</status>')
+    expect(enqueuedNotifications[0]).toContain(
+      'Agent "test" failed: Stream idle timeout',
+    )
+  })
+
+  test('enqueues killed notification', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: false }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'killed',
+      setAppState: setAppState as any,
+    })
+
+    expect(enqueuedNotifications).toHaveLength(1)
+    expect(enqueuedNotifications[0]).toContain('<status>killed</status>')
+    expect(enqueuedNotifications[0]).toContain('Agent "test" was stopped')
+  })
+
+  test('prevents duplicate notifications', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: false }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'completed',
+      setAppState: setAppState as any,
+    })
+
+    // Second call — notified flag already set by first call
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'completed',
+      setAppState: setAppState as any,
+    })
+
+    expect(enqueuedNotifications).toHaveLength(1)
+  })
+
+  test('skips if task already notified', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: true }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'completed',
+      setAppState: setAppState as any,
+    })
+
+    expect(enqueuedNotifications).toHaveLength(0)
+  })
+
+  // The queue's default for notifications is 'later', which query.ts's
+  // mid-turn drain (getCommandsByMaxPriority('next')) filters out — the
+  // completion would then sit until the whole turn ended.
+  test('enqueues at next priority so the mid-turn drain can pick it up', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: false }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'completed',
+      setAppState: setAppState as any,
+    })
+
+    expect(enqueuedCommands).toHaveLength(1)
+    expect(enqueuedCommands[0].priority).toBe('next')
+    expect(enqueuedCommands[0].mode).toBe('task-notification')
+    // Main-thread agents carry no agentId, so the main loop's
+    // `cmd.agentId === undefined` filter matches them.
+    expect(enqueuedCommands[0].agentId).toBeUndefined()
+  })
+
+  test('stamps the parent agentId so nested subagents drain their own notifications', () => {
+    const { setAppState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ notified: false }) },
+    })
+
+    enqueueAgentNotification({
+      taskId: 'test-agent-001',
+      description: 'test',
+      status: 'completed',
+      setAppState: setAppState as any,
+      agentId: 'parent-agent-42' as any,
+    })
+
+    expect(enqueuedCommands).toHaveLength(1)
+    expect(enqueuedCommands[0].agentId).toBe('parent-agent-42')
+  })
+})
+
+describe('isLocalAgentTask', () => {
+  test('returns true for local_agent type', () => {
+    expect(isLocalAgentTask(makeRunningTask())).toBe(true)
+  })
+
+  test('returns false for other types', () => {
+    expect(isLocalAgentTask({ type: 'local_bash' })).toBe(false)
+  })
+
+  test('returns false for null/undefined', () => {
+    expect(isLocalAgentTask(null)).toBe(false)
+    expect(isLocalAgentTask(undefined)).toBe(false)
+  })
+})
+
+describe('updateAgentSummary', () => {
+  // Supply side of the recap chain: startAgentSummarization → this →
+  // task.progress.summary → useBackgroundAgentTasks → getAgentRowDescription.
+  // The AppState write must NOT be gated on the SDK flag (the state mock at the
+  // top of this file has getSdkAgentProgressSummariesEnabled → false); only the
+  // emitTaskProgress SDK event is, so TUI sessions get the recap while SDK
+  // consumers who never opted in stay unaffected.
+  test('stores the recap on the running task even with SDK summaries off', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: {
+        'test-agent-001': makeRunningTask({
+          progress: { toolUseCount: 2, tokenCount: 300 },
+        }),
+      },
+    })
+
+    updateAgentSummary(
+      'test-agent-001',
+      'Verifying runtime sampler',
+      setAppState as any,
+    )
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.progress.summary).toBe('Verifying runtime sampler')
+    // Counters must survive — the row renders elapsed/tokens next to the recap.
+    expect(task.progress.toolUseCount).toBe(2)
+    expect(task.progress.tokenCount).toBe(300)
+  })
+
+  test('no-op once the agent reached a terminal state', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: {
+        'test-agent-001': makeRunningTask({
+          status: 'completed',
+          progress: { toolUseCount: 1, tokenCount: 10 },
+        }),
+      },
+    })
+
+    updateAgentSummary('test-agent-001', 'late summary', setAppState as any)
+
+    expect(getState().tasks['test-agent-001'].progress.summary).toBeUndefined()
+  })
+})
+
+describe('updateAgentProgress', () => {
+  test('updates progress while preserving summary', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: {
+        'test-agent-001': makeRunningTask({
+          progress: { summary: 'Working on auth' },
+        }),
+      },
+    })
+
+    updateAgentProgress(
+      'test-agent-001',
+      {
+        toolUseCount: 5,
+        tokenCount: 1000,
+        lastActivity: { toolName: 'Write', input: {} },
+      },
+      setAppState as any,
+    )
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.progress.toolUseCount).toBe(5)
+    expect(task.progress.tokenCount).toBe(1000)
+    expect(task.progress.summary).toBe('Working on auth')
+  })
+
+  test('no-op if task not running', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: {
+        'test-agent-001': makeRunningTask({
+          status: 'completed',
+          progress: {},
+        }),
+      },
+    })
+
+    updateAgentProgress(
+      'test-agent-001',
+      { toolUseCount: 5, tokenCount: 1000 },
+      setAppState as any,
+    )
+
+    const task = getState().tasks['test-agent-001']
+    expect(task.progress.toolUseCount).toBeUndefined()
+  })
+})
+
+describe('foreground agent abort ownership', () => {
+  test('parent abort stops the task before handoff', () => {
+    const parentAbortController = new AbortController()
+    const { setAppState } = createSetAppState()
+    const registration = registerAgentForeground({
+      agentId: 'foreground-parent-linked',
+      description: 'linked agent',
+      prompt: 'work',
+      selectedAgent: { agentType: 'general-purpose' } as any,
+      setAppState: setAppState as any,
+      parentAbortController,
+    })
+
+    parentAbortController.abort()
+
+    expect(registration.abortController.signal.aborted).toBe(true)
+    unregisterAgentForeground('foreground-parent-linked', setAppState as any)
+  })
+
+  test('handoff detaches parent abort but task kill still stops the same controller', async () => {
+    const parentAbortController = new AbortController()
+    const { setAppState, getState } = createSetAppState()
+    const registration = registerAgentForeground({
+      agentId: 'foreground-handed-off',
+      description: 'handed off agent',
+      prompt: 'work',
+      selectedAgent: { agentType: 'general-purpose' } as any,
+      setAppState: setAppState as any,
+      parentAbortController,
+    })
+
+    expect(
+      backgroundAgentTask(
+        registration.taskId,
+        getState as any,
+        setAppState as any,
+      ),
+    ).toBe(true)
+    await registration.backgroundSignal
+
+    parentAbortController.abort()
+    expect(registration.abortController.signal.aborted).toBe(false)
+
+    killAsyncAgent(registration.taskId, setAppState as any)
+    expect(registration.abortController.signal.aborted).toBe(true)
+  })
+})
+
+describe('unregisterAgentForeground', () => {
+  // Regression: the phantom subagent. The guard here used to be
+  // `task.isBackgrounded`, but the auto-background timer (120s) and Ctrl+B both
+  // write that flag into AppState *before* resolving the background signal. If
+  // the agent's next message had already settled, Promise.race still yielded
+  // 'message', the loop broke, and this ran with the flag set and no
+  // continuation behind it — leaving a `running` task that never got
+  // `notified: true` and was therefore immune to every eviction path in
+  // utils/task/framework.ts.
+
+  test('removes a plain foreground task', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ isBackgrounded: false }) },
+    })
+
+    unregisterAgentForeground('test-agent-001', setAppState as any)
+
+    expect(getState().tasks['test-agent-001']).toBeUndefined()
+  })
+
+  test('removes a task flagged isBackgrounded when the loop did NOT hand off', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ isBackgrounded: true }) },
+    })
+
+    // wasBackgrounded === false: the race resolved as 'message', so nothing
+    // else owns this task.
+    unregisterAgentForeground('test-agent-001', setAppState as any, {
+      handedOffToBackground: false,
+    })
+
+    expect(getState().tasks['test-agent-001']).toBeUndefined()
+  })
+
+  test('leaves the task alone when the loop DID hand off to the background', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: { 'test-agent-001': makeRunningTask({ isBackgrounded: true }) },
+    })
+
+    unregisterAgentForeground('test-agent-001', setAppState as any, {
+      handedOffToBackground: true,
+    })
+
+    // The background continuation owns it and will transition it later.
+    expect(getState().tasks['test-agent-001']).toBeDefined()
+    expect(getState().tasks['test-agent-001'].status).toBe('running')
+  })
+
+  test('runs unregisterCleanup exactly once, outside the state updater', () => {
+    let calls = 0
+    const { setAppState } = createSetAppState({
+      tasks: {
+        'test-agent-001': makeRunningTask({
+          isBackgrounded: true,
+          unregisterCleanup: () => calls++,
+        }),
+      },
+    })
+
+    unregisterAgentForeground('test-agent-001', setAppState as any, {
+      handedOffToBackground: false,
+    })
+
+    expect(calls).toBe(1)
+  })
+
+  test('is a no-op for a task that is not a local agent', () => {
+    const { setAppState, getState } = createSetAppState({
+      tasks: {
+        other: { type: 'local_shell', id: 'other', status: 'running' } as any,
+      },
+    })
+
+    unregisterAgentForeground('other', setAppState as any)
+
+    expect(getState().tasks.other).toBeDefined()
+  })
+})

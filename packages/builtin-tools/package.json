@@ -1,0 +1,17 @@
+{
+  "name": "@open-claude-code/builtin-tools",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./registry.js": "./src/registry.ts",
+    "./tools/*": "./src/tools/*"
+  },
+  "dependencies": {
+    "@open-claude-code/tool-runtime": "workspace:*",
+    "marked": "^17.0.6"
+  }
+}

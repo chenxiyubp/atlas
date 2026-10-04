@@ -1,0 +1,416 @@
+import {
+  afterAll,
+  describe,
+  expect,
+  test,
+  beforeEach,
+  afterEach,
+  mock,
+} from 'bun:test'
+import { setupEnvUtilsMock } from '../../../../../tests/mocks/envUtils.js'
+import {
+  isOpenAIThinkingEnabled,
+  buildOpenAIRequestBody,
+} from '../requestBody.js'
+
+// envUtils goes through the shared complete-surface mock (delegates to the
+// real module unless overridden) — see tests/mocks/envUtils.ts for why the
+// old hand-rolled partial mocks were an order-dependent CI hazard.
+// No overrides: this file only needs REAL env semantics; the setup exists so
+// this writer produces the same complete surface as every other envUtils mocker.
+const envUtilsMock = setupEnvUtilsMock()
+afterAll(() => {
+  envUtilsMock.reset()
+})
+
+describe('isOpenAIThinkingEnabled', () => {
+  const originalEnv = {
+    OPENAI_ENABLE_THINKING: process.env.OPENAI_ENABLE_THINKING,
+  }
+
+  beforeEach(() => {
+    // Clear env var before each test
+    delete process.env.OPENAI_ENABLE_THINKING
+  })
+
+  afterEach(() => {
+    // Restore original env var — delete key if it was originally undefined
+    // to avoid leaking the env key into subsequent tests
+    if (originalEnv.OPENAI_ENABLE_THINKING === undefined) {
+      delete process.env.OPENAI_ENABLE_THINKING
+    } else {
+      process.env.OPENAI_ENABLE_THINKING = originalEnv.OPENAI_ENABLE_THINKING
+    }
+  })
+
+  describe('OPENAI_ENABLE_THINKING env var', () => {
+    test('returns true when OPENAI_ENABLE_THINKING=1', () => {
+      process.env.OPENAI_ENABLE_THINKING = '1'
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(true)
+    })
+
+    test('returns true when OPENAI_ENABLE_THINKING=true', () => {
+      process.env.OPENAI_ENABLE_THINKING = 'true'
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(true)
+    })
+
+    test('returns true when OPENAI_ENABLE_THINKING=yes', () => {
+      process.env.OPENAI_ENABLE_THINKING = 'yes'
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(true)
+    })
+
+    test('returns true when OPENAI_ENABLE_THINKING=on', () => {
+      process.env.OPENAI_ENABLE_THINKING = 'on'
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(true)
+    })
+
+    test('returns true when OPENAI_ENABLE_THINKING=TRUE (case insensitive)', () => {
+      process.env.OPENAI_ENABLE_THINKING = 'TRUE'
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(true)
+    })
+
+    test('returns false when OPENAI_ENABLE_THINKING=0', () => {
+      process.env.OPENAI_ENABLE_THINKING = '0'
+      expect(isOpenAIThinkingEnabled('deepseek-reasoner')).toBe(false)
+    })
+
+    test('returns false when OPENAI_ENABLE_THINKING=false', () => {
+      process.env.OPENAI_ENABLE_THINKING = 'false'
+      expect(isOpenAIThinkingEnabled('deepseek-reasoner')).toBe(false)
+    })
+
+    test('returns false when OPENAI_ENABLE_THINKING is empty', () => {
+      process.env.OPENAI_ENABLE_THINKING = ''
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(false)
+    })
+
+    test('returns false when OPENAI_ENABLE_THINKING is not set', () => {
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(false)
+    })
+  })
+
+  describe('model name auto-detect', () => {
+    test('returns true when model name is "deepseek-reasoner"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-reasoner')).toBe(true)
+    })
+
+    test('returns true when model name contains "deepseek-reasoner" (case insensitive)', () => {
+      expect(isOpenAIThinkingEnabled('DeepSeek-Reasoner')).toBe(true)
+    })
+
+    test('returns true when model name has prefix/suffix for deepseek-reasoner', () => {
+      expect(isOpenAIThinkingEnabled('my-deepseek-reasoner-v1')).toBe(true)
+    })
+
+    test('returns true when model name is namespaced for deepseek-reasoner', () => {
+      expect(isOpenAIThinkingEnabled('TokenService/deepseek-reasoner')).toBe(
+        true,
+      )
+    })
+
+    test('returns true when model name is "deepseek-v3.2"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-v3.2')).toBe(true)
+    })
+
+    test('returns true when model name contains "deepseek-v3.2" (case insensitive)', () => {
+      expect(isOpenAIThinkingEnabled('DeepSeek-V3.2')).toBe(true)
+    })
+
+    test('returns true when model name has prefix/suffix for deepseek-v3.2', () => {
+      expect(isOpenAIThinkingEnabled('my-deepseek-v3.2-v1')).toBe(true)
+    })
+
+    test('returns true when model name is namespaced for deepseek-v3.2', () => {
+      expect(isOpenAIThinkingEnabled('TokenService/deepseek-v3.2')).toBe(true)
+    })
+
+    test('returns true when model name is "deepseek-chat"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-chat')).toBe(true)
+    })
+
+    test('returns true when model name is "deepseek-v3"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-v3')).toBe(true)
+    })
+
+    test('returns true when model name is "deepseek-v4"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-v4')).toBe(true)
+    })
+
+    test('returns true when model name is "deepseek-v4-pro"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-v4-pro')).toBe(true)
+    })
+
+    test('returns true when model name is "deepseek-r1"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-r1')).toBe(true)
+    })
+
+    test('returns true when model name contains "deepseek"', () => {
+      expect(isOpenAIThinkingEnabled('deepseek-coder')).toBe(true)
+    })
+
+    test('returns true when model name is "mimo-v2-flash"', () => {
+      expect(isOpenAIThinkingEnabled('mimo-v2-flash')).toBe(true)
+    })
+
+    test('returns true when model name is "mimo-v2-pro"', () => {
+      expect(isOpenAIThinkingEnabled('mimo-v2-pro')).toBe(true)
+    })
+
+    test('returns true when model name is "mimo-v2.5-pro"', () => {
+      expect(isOpenAIThinkingEnabled('mimo-v2.5-pro')).toBe(true)
+    })
+
+    test('returns true when model name contains "mimo"', () => {
+      expect(isOpenAIThinkingEnabled('MiMo-V2-Omni')).toBe(true)
+    })
+
+    test('returns false when model name is "gpt-4o"', () => {
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(false)
+    })
+
+    test('returns false when model name is empty', () => {
+      expect(isOpenAIThinkingEnabled('')).toBe(false)
+    })
+  })
+
+  describe('priority and combined detection', () => {
+    test('OPENAI_ENABLE_THINKING=1 enables thinking for any model', () => {
+      process.env.OPENAI_ENABLE_THINKING = '1'
+      expect(isOpenAIThinkingEnabled('gpt-4o')).toBe(true)
+      expect(isOpenAIThinkingEnabled('deepseek-v3')).toBe(true)
+      expect(isOpenAIThinkingEnabled('qwen-3')).toBe(true)
+    })
+
+    test('OPENAI_ENABLE_THINKING=false disables thinking even for deepseek-reasoner', () => {
+      process.env.OPENAI_ENABLE_THINKING = 'false'
+      expect(isOpenAIThinkingEnabled('deepseek-reasoner')).toBe(false)
+    })
+
+    test('OPENAI_ENABLE_THINKING=0 disables thinking even for deepseek-reasoner', () => {
+      process.env.OPENAI_ENABLE_THINKING = '0'
+      expect(isOpenAIThinkingEnabled('deepseek-reasoner')).toBe(false)
+    })
+
+    test('both conditions can enable thinking', () => {
+      process.env.OPENAI_ENABLE_THINKING = '1'
+      expect(isOpenAIThinkingEnabled('deepseek-reasoner')).toBe(true)
+    })
+  })
+})
+
+describe('buildOpenAIRequestBody — thinking params', () => {
+  const baseParams = {
+    model: 'deepseek-reasoner',
+    messages: [{ role: 'user', content: 'hello' }],
+    tools: [] as any[],
+    toolChoice: undefined as any,
+  } as any
+
+  test('includes official DeepSeek API thinking format when enabled', () => {
+    const body = buildOpenAIRequestBody({ ...baseParams, enableThinking: true })
+    expect(body.thinking).toEqual({ type: 'enabled' })
+  })
+
+  test('includes prompt_cache_key when supplied for the official OpenAI API', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+      maxTokens: 1024,
+      promptCacheKey: 'occ:session-123',
+    })
+    expect(body.prompt_cache_key).toBe('occ:session-123')
+  })
+
+  test('does not send prompt_cache_key to compatible providers when omitted', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+      maxTokens: 1024,
+    })
+    expect('prompt_cache_key' in body).toBe(false)
+  })
+
+  test('includes vLLM/self-hosted thinking format when enabled', () => {
+    const body = buildOpenAIRequestBody({ ...baseParams, enableThinking: true })
+    expect(body.enable_thinking).toBe(true)
+    expect(body.chat_template_kwargs).toEqual({
+      thinking: true,
+      enable_thinking: true,
+    })
+  })
+
+  test('includes both formats simultaneously when enabled', () => {
+    const body = buildOpenAIRequestBody({ ...baseParams, enableThinking: true })
+    expect(body.thinking).toEqual({ type: 'enabled' })
+    expect(body.enable_thinking).toBe(true)
+    expect(body.chat_template_kwargs!.thinking).toBe(true)
+  })
+
+  test('states thinking:disabled explicitly for DeepSeek when turned off', () => {
+    // DeepSeek's `thinking` field defaults to `enabled`, so omitting it left
+    // OPENAI_ENABLE_THINKING=0 a no-op against the official API.
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+    })
+    expect(body.thinking).toEqual({ type: 'disabled' })
+    expect(body.enable_thinking).toBe(false)
+    expect(body.chat_template_kwargs).toEqual({
+      thinking: false,
+      enable_thinking: false,
+    })
+  })
+
+  test('does NOT include thinking params when disabled on non-DeepSeek models', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      model: 'mimo-7b',
+      enableThinking: false,
+    })
+    expect(body.thinking).toBeUndefined()
+    expect(body.enable_thinking).toBeUndefined()
+    expect(body.chat_template_kwargs).toBeUndefined()
+  })
+
+  test('always includes stream and stream_options', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+    })
+    expect(body.stream).toBe(true)
+    expect(body.stream_options).toEqual({ include_usage: true })
+  })
+
+  test('includes temperature when thinking is off and override is set', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+      temperatureOverride: 0.7,
+    })
+    expect(body.temperature).toBe(0.7)
+  })
+
+  test('excludes temperature when thinking is on even if override is set', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: true,
+      temperatureOverride: 0.7,
+    })
+    expect(body.temperature).toBeUndefined()
+  })
+
+  test('applies the documented DeepSeek coding temperature when thinking is off', () => {
+    // DeepSeek's unset default is 1.0, which its parameter guide assigns to
+    // data analysis; coding/math is 0.0. baseParams targets deepseek-reasoner.
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+    })
+    expect(body.temperature).toBe(0)
+  })
+
+  test('leaves non-DeepSeek models without a temperature when no override is set', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      model: 'glm-4.7',
+      enableThinking: false,
+    })
+    expect(body.temperature).toBeUndefined()
+  })
+
+  test('includes tools and tool_choice when tools are provided', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      tools: [{ type: 'function', function: { name: 'test' } }],
+      toolChoice: 'auto',
+      enableThinking: false,
+    })
+    expect(body.tools).toHaveLength(1)
+    expect(body.tool_choice).toBe('auto')
+  })
+
+  test('excludes tools when empty', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      enableThinking: false,
+    })
+    expect(body.tools).toBeUndefined()
+    expect(body.tool_choice).toBeUndefined()
+  })
+})
+
+describe('buildOpenAIRequestBody — reasoning_effort (chat path)', () => {
+  const baseParams = {
+    model: 'gpt-5.2',
+    messages: [],
+    tools: [],
+    toolChoice: undefined,
+    enableThinking: false,
+    maxTokens: 1000,
+  }
+
+  test('passes reasoning_effort through when provided', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      reasoningEffort: 'medium',
+    })
+    expect((body as { reasoning_effort?: string }).reasoning_effort).toBe(
+      'medium',
+    )
+  })
+
+  test('omits the key entirely when not provided (strict endpoints reject unknown keys)', () => {
+    const body = buildOpenAIRequestBody(baseParams)
+    expect('reasoning_effort' in body).toBe(false)
+  })
+})
+
+describe('buildOpenAIRequestBody — GPT-5 token field compatibility', () => {
+  const baseParams = {
+    messages: [],
+    tools: [],
+    toolChoice: undefined,
+    enableThinking: false,
+    maxTokens: 2048,
+  }
+
+  test('uses max_completion_tokens for GPT-5 on official OpenAI', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      model: 'gpt-5.6-sol',
+      baseURL: 'https://api.openai.com/v1',
+    })
+    expect(body.max_completion_tokens).toBe(2048)
+    expect('max_tokens' in body).toBe(false)
+  })
+
+  test('keeps max_tokens for gpt-4o on official OpenAI', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      model: 'gpt-4o',
+      baseURL: 'https://api.openai.com/v1',
+    })
+    expect(body.max_tokens).toBe(2048)
+    expect('max_completion_tokens' in body).toBe(false)
+  })
+
+  test('keeps max_tokens for GPT-5 on compatible endpoints', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      model: 'gpt-5.6-sol',
+      baseURL: 'https://compatible.example/v1',
+    })
+    expect(body.max_tokens).toBe(2048)
+    expect('max_completion_tokens' in body).toBe(false)
+  })
+
+  test('keeps max_tokens for other compatible models', () => {
+    const body = buildOpenAIRequestBody({
+      ...baseParams,
+      model: 'deepseek-chat',
+      baseURL: 'https://api.deepseek.com/v1',
+    })
+    expect(body.max_tokens).toBe(2048)
+    expect('max_completion_tokens' in body).toBe(false)
+  })
+})

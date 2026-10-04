@@ -1,0 +1,831 @@
+import { afterAll, beforeAll, expect, mock, test } from 'bun:test'
+import * as realTools from 'src/tools.js'
+import { makeSharedModuleMock } from '../../../tests/mocks/sharedModuleMock.js'
+
+// Note: mock specifier must resolve to the same module that impl actually imports (bun mock.module
+// matches by resolved module). impl uses '@open-claude-code/builtin-tools/...' and 'src/*' alias
+// path imports, so the same specifier is used here.
+const runAgentMock = setupRunAgentMock({
+  runAgent: async function* () {
+    yield {
+      type: 'assistant',
+      message: { content: [{ type: 'text', text: 'agent-text' }] },
+    }
+  },
+} as unknown as RunAgentOverrides)
+afterAll(() => runAgentMock.reset())
+
+const agentToolUtilsMock = setupAgentToolUtilsMock({
+  finalizeAgentTool: () => ({
+    content: [{ type: 'text', text: 'agent-text' }],
+    usage: { output_tokens: 42 },
+    totalTokens: 42,
+    totalToolUseCount: 3,
+  }),
+} as unknown as AgentToolUtilsOverrides)
+afterAll(() => agentToolUtilsMock.reset())
+
+const loadAgentsDirMock = setupLoadAgentsDirMock({
+  isBuiltInAgent: () => true,
+})
+afterAll(() => loadAgentsDirMock.reset())
+
+// src/tools.ts is a re-export barrel over @open-claude-code/builtin-tools, and
+// on Linux mocking a barrel replaces the package module too — a one-export
+// literal here would blank out the other twelve for every later file in the
+// src/workflow shard. Wrap the real module so only assembleToolPool changes.
+const toolsMock = makeSharedModuleMock('src/tools.js', realTools).setup()
+beforeAll(() =>
+  toolsMock.set({ assembleToolPool: () => ({ tools: [] }) as never }),
+)
+afterAll(() => toolsMock.reset())
+// The hand-rolled version of this mirrored the real createUserMessage shape by
+// hand, with a comment explaining that an incomplete surface here corrupts every
+// later file importing the real one. The shared helper removes the need to
+// mirror anything: unlisted exports delegate to the real module.
+const messagesMock = setupMessagesMock({
+  extractTextContent: () => 'agent-text',
+})
+afterAll(() => messagesMock.reset())
+const uuidMock = setupUuidMock({
+  createAgentId: () => 'agent-1',
+})
+afterAll(() => uuidMock.reset())
+
+mock.module('src/utils/telemetry/debug.ts', debugMock)
+
+// isolation:'worktree' tests: mock worktree trio (to avoid actually running git worktree add).
+// Note mock.module is process-global; worktreeState is defined outside the factory for test reset.
+// Do not mock cwd.js: runWithCwdOverride actually running AsyncLocalStorage is harmless to mocked runAgent,
+// and avoids polluting other tests in the same process that depend on pwd/getCwd.
+const worktreeState = {
+  shouldThrow: false,
+  /** Message createAgentWorktree throws with; drives the retryable classification. */
+  throwMessage: 'wt boom',
+  hasChanges: false,
+  created: [] as string[],
+  removed: [] as string[],
+  changesCalls: 0,
+  createGate: null as Promise<void> | null,
+}
+const worktreeMock = setupWorktreeMock({
+  createAgentWorktree: async (slug: string) => {
+    if (worktreeState.createGate) await worktreeState.createGate
+    if (worktreeState.shouldThrow) throw new Error(worktreeState.throwMessage)
+    worktreeState.created.push(slug)
+    return {
+      worktreePath: '/fake/wt',
+      worktreeBranch: 'wt-branch',
+      headCommit: 'abc123',
+      gitRoot: '/fake',
+      hookBased: false,
+    }
+  },
+  hasWorktreeChanges: async () => {
+    worktreeState.changesCalls++
+    return worktreeState.hasChanges
+  },
+  removeAgentWorktree: async (path: string) => {
+    worktreeState.removed.push(path)
+    return true
+  },
+})
+afterAll(() => worktreeMock.reset())
+
+import {
+  AgentAdapterRegistry,
+  AGENT_MAX_RETRIES,
+  AGENT_MAX_RETRIES_BY_REASON,
+  runWorkflow,
+  type ProgressEvent,
+  type WorkflowPorts,
+  WorkflowAbortedError,
+} from '@open-claude-code/workflow-engine'
+import { AgentExecutionLimitError } from '@open-claude-code/builtin-tools/tools/AgentTool/agentExecutionWatchdog.js'
+import {
+  claudeCodeBackend,
+  resolveAgentDefinition,
+  mapWorkflowModel,
+  describeMalformed,
+  extractStructuredOutput,
+  isGitLockContention,
+  scanStructuredOutput,
+  WORKFLOW_AGENT,
+} from '../backends/claudeCodeBackend.js'
+import { makeHostHandle } from '../hostHandle.js'
+import { setupAnalyticsMock } from '../../../tests/mocks/analytics.js'
+import { setupUuidMock } from '../../../tests/mocks/uuid.js'
+import { setupWorktreeMock } from '../../../tests/mocks/worktree.js'
+import {
+  setupRunAgentMock,
+  type RunAgentOverrides,
+} from '../../../tests/mocks/runAgent.js'
+import {
+  setupAgentToolUtilsMock,
+  type AgentToolUtilsOverrides,
+} from '../../../tests/mocks/agentToolUtils.js'
+import { setupLoadAgentsDirMock } from '../../../tests/mocks/loadAgentsDir.js'
+import { setupMessagesMock } from '../../../tests/mocks/messages.js'
+import { debugMock } from '../../../tests/mocks/debug.js'
+
+const analyticsMock = setupAnalyticsMock()
+afterAll(() => analyticsMock.reset())
+
+function ctx() {
+  return {
+    host: makeHostHandle({
+      toolUseContext: {
+        options: {
+          agentDefinitions: { activeAgents: [] },
+          querySource: 'workflow',
+          mainLoopModel: 'm',
+        },
+        getAppState: () => ({
+          toolPermissionContext: {
+            mode: 'acceptEdits',
+            alwaysAllowRules: {},
+          },
+          mcp: { tools: [] },
+        }),
+      } as never,
+      canUseTool: (() => Promise.resolve({ behavior: 'allow' })) as never,
+      // run() does not read parentMessage; use an empty object placeholder to satisfy the WorkflowHostBundle type.
+      parentMessage: {} as never,
+    }),
+    signal: new AbortController().signal,
+    runId: 'r1',
+    agentId: 1,
+  }
+}
+
+test('text agent → ok + token/tool/model accounting', async () => {
+  const res = await claudeCodeBackend.run({ prompt: 'do it' }, ctx())
+  expect(res.kind).toBe('ok')
+  if (res.kind === 'ok') {
+    expect(res.output).toBe('agent-text')
+    expect(res.usage.outputTokens).toBe(42)
+    // panel display fields: tokenCount(=totalTokens) / toolCount / model (fallback mainLoopModel 'm')
+    expect(res.tokenCount).toBe(42)
+    expect(res.toolCount).toBe(3)
+    expect(res.model).toBe('m')
+  }
+})
+
+test('isolation:worktree → create worktree + auto-cleanup on no changes; slug matches cleanup regex', async () => {
+  worktreeState.shouldThrow = false
+  worktreeState.hasChanges = false
+  worktreeState.created = []
+  worktreeState.removed = []
+  worktreeState.changesCalls = 0
+  const res = await claudeCodeBackend.run(
+    { prompt: 'do', isolation: 'worktree' },
+    ctx(),
+  )
+  expect(res.kind).toBe('ok')
+  expect(worktreeState.created).toHaveLength(1)
+  // slug must match cleanupStaleAgentWorktrees cleanup regex ^wf_[0-9a-f]{8}-[0-9a-f]{3}-\d+$
+  expect(worktreeState.created[0]).toMatch(/^wf_[0-9a-f]{8}-[0-9a-f]{3}-\d+$/)
+  expect(worktreeState.changesCalls).toBe(1)
+  expect(worktreeState.removed).toHaveLength(1) // no changes → auto-remove
+})
+
+test('isolation:worktree can be cancelled before creation completes', async () => {
+  let releaseWorktree!: () => void
+  worktreeState.createGate = new Promise<void>(resolve => {
+    releaseWorktree = resolve
+  })
+  worktreeState.hasChanges = false
+  worktreeState.created = []
+  worktreeState.removed = []
+  worktreeState.changesCalls = 0
+
+  let abortController!: AbortController
+  let confirmRegistration!: () => void
+  const registered = new Promise<void>(resolve => {
+    confirmRegistration = resolve
+  })
+  const unregistered: number[] = []
+
+  try {
+    const resultPromise = claudeCodeBackend.run(
+      { prompt: 'cancel during setup', isolation: 'worktree' },
+      {
+        ...ctx(),
+        agentId: 88,
+        registerAgentAbort: (_id, controller) => {
+          abortController = controller
+          confirmRegistration()
+        },
+        unregisterAgentAbort: id => unregistered.push(id),
+      },
+    )
+
+    await registered
+    abortController.abort()
+    releaseWorktree()
+
+    await expect(resultPromise).resolves.toEqual({
+      kind: 'dead',
+      reason: 'agent-cancelled',
+      retryable: false,
+    })
+    expect(worktreeState.created).toHaveLength(1)
+    expect(worktreeState.removed).toEqual(['/fake/wt'])
+    expect(unregistered).toEqual([88])
+  } finally {
+    worktreeState.createGate = null
+  }
+})
+
+test('isolation:worktree has changes → keep worktree (no remove)', async () => {
+  worktreeState.hasChanges = true
+  worktreeState.created = []
+  worktreeState.removed = []
+  worktreeState.changesCalls = 0
+  const res = await claudeCodeBackend.run(
+    { prompt: 'do', isolation: 'worktree' },
+    ctx(),
+  )
+  expect(res.kind).toBe('ok')
+  expect(worktreeState.removed).toHaveLength(0) // has changes → keep
+  expect(worktreeState.changesCalls).toBe(1)
+})
+
+test('isolation:worktree creation fails → fail-closed dead, marked retryable:false', async () => {
+  worktreeState.shouldThrow = true
+  worktreeState.throwMessage = 'wt boom'
+  const res = await claudeCodeBackend.run(
+    { prompt: 'do', isolation: 'worktree' },
+    ctx(),
+  )
+  expect(res.kind).toBe('dead')
+  if (res.kind !== 'dead') throw new Error('unreachable')
+  expect(res.reason).toBe('worktree-failed')
+  // The causes are environmental and deterministic for an identical call (not a git repo,
+  // no disk, branch taken). Without retryable:false the engine would burn its whole retry
+  // budget re-running git plumbing before the agent has even started.
+  expect(res.retryable).toBe(false)
+  expect(res.detail).toContain('wt boom')
+  worktreeState.shouldThrow = false
+  worktreeState.throwMessage = 'wt boom'
+})
+
+test('isolation:worktree failing on git lock contention stays retryable (transient collision)', async () => {
+  // Concurrent agents entering isolation race to fetch/create the same base ref with no
+  // mutex in between; the loser dies on git's lock file. Raising the default concurrency
+  // made this MORE likely, so marking it deterministic would be a net regression.
+  for (const message of [
+    "fatal: Unable to create '/repo/.git/index.lock': File exists.",
+    "error: cannot lock ref 'refs/heads/wf': is at ... but expected ...",
+    'fatal: Unable to create /repo/.git/refs/remotes/origin/main.lock',
+  ]) {
+    worktreeState.shouldThrow = true
+    worktreeState.throwMessage = message
+    const res = await claudeCodeBackend.run(
+      { prompt: 'do', isolation: 'worktree' },
+      ctx(),
+    )
+    expect(res.kind).toBe('dead')
+    if (res.kind !== 'dead') throw new Error('unreachable')
+    expect(res.reason).toBe('worktree-failed')
+    // absent (not false) → the engine's transient path, capped at 1 retry by
+    // AGENT_MAX_RETRIES_BY_REASON['worktree-failed']
+    expect(res.retryable).toBeUndefined()
+  }
+  worktreeState.shouldThrow = false
+  worktreeState.throwMessage = 'wt boom'
+})
+
+test('isGitLockContention matches git lock signatures only', () => {
+  expect(
+    isGitLockContention("Unable to create '/r/.git/index.lock': File exists"),
+  ).toBe(true)
+  expect(isGitLockContention("cannot lock ref 'refs/heads/x'")).toBe(true)
+  expect(isGitLockContention('UNABLE TO CREATE /r/foo.LOCK')).toBe(true) // case-insensitive
+  // deterministic environment failures must not slip into the retryable bucket
+  expect(isGitLockContention('not a git repository')).toBe(false)
+  expect(isGitLockContention('No space left on device')).toBe(false)
+  expect(isGitLockContention("branch 'wf_x' already exists")).toBe(false)
+  expect(isGitLockContention('wt boom')).toBe(false)
+})
+
+test('the engine caps a retryable worktree-failed at one retry', () => {
+  // Pins the pairing between the backend's classification and the engine budget: a lock
+  // collision clears within one backoff or not at all, so it must not get the generic 3.
+  expect(AGENT_MAX_RETRIES_BY_REASON['worktree-failed']).toBe(1)
+  expect(AGENT_MAX_RETRIES_BY_REASON['worktree-failed']).toBeLessThan(
+    AGENT_MAX_RETRIES,
+  )
+})
+
+test('no isolation → no worktree created', async () => {
+  worktreeState.created = []
+  const res = await claudeCodeBackend.run({ prompt: 'do' }, ctx())
+  expect(res.kind).toBe('ok')
+  expect(worktreeState.created).toHaveLength(0)
+})
+
+test('runAgent throws → dead', async () => {
+  // override mock so runAgent throws (last-write-wins)
+  runAgentMock.set({
+    // biome-ignore lint/correctness/useYield: intentionally throws to test dead branch (no yield)
+    runAgent: async function* () {
+      throw new Error('boom')
+    },
+  } as unknown as RunAgentOverrides)
+  const res = await claudeCodeBackend.run({ prompt: 'fail' }, ctx())
+  expect(res.kind).toBe('dead')
+})
+
+test('execution limits are non-retryable dead results, not workflow aborts', async () => {
+  for (const [kind, reason] of [
+    ['total-timeout', 'agent-total-timeout'],
+    ['no-progress', 'agent-no-progress'],
+  ] as const) {
+    runAgentMock.set({
+      // biome-ignore lint/correctness/useYield: intentionally throws before output
+      runAgent: async function* (opts: {
+        override?: { abortController?: AbortController }
+      }) {
+        const error = new AgentExecutionLimitError(kind, 100)
+        opts.override?.abortController?.abort(error)
+        throw error
+      },
+    } as unknown as RunAgentOverrides)
+
+    const res = await claudeCodeBackend.run({ prompt: 'limit' }, ctx())
+    expect(res).toMatchObject({
+      kind: 'dead',
+      reason,
+      retryable: false,
+    })
+  }
+})
+
+// The next tests cover both cancellation scopes: ctx.signal owns the whole
+// workflow, while the registered agent controller owns only one child.
+
+test('ctx.signal pre-abort → backend bridge: override.abortController.signal.aborted=true', async () => {
+  // use capturedOverride to expose the agentAbort created by backend (the override.abortController received by mock)
+  let capturedController: AbortController | undefined
+  runAgentMock.set({
+    runAgent: async function* (opts: {
+      override?: { abortController?: AbortController }
+    }) {
+      capturedController = opts.override?.abortController
+      yield {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'x' }] },
+      }
+    },
+  } as unknown as RunAgentOverrides)
+  const parentAbort = new AbortController()
+  parentAbort.abort()
+  // mock does not throw → backend takes the normal return path; but the bridge `if (ctx.signal.aborted) agentAbort.abort()`
+  // has already triggered synchronously, capturedController.signal.aborted must be true (root cause of kill bridge)
+  await claudeCodeBackend.run(
+    { prompt: 'pre-aborted' },
+    { ...ctx(), signal: parentAbort.signal },
+  )
+  expect(capturedController?.signal.aborted).toBe(true)
+})
+
+test('unscoped AbortError → ordinary dead result, not a workflow cancellation', async () => {
+  runAgentMock.set({
+    // biome-ignore lint/correctness/useYield: intentionally throws before output
+    runAgent: async function* () {
+      const error = new Error('transport aborted')
+      error.name = 'AbortError'
+      throw error
+    },
+  } as unknown as RunAgentOverrides)
+
+  await expect(
+    claudeCodeBackend.run({ prompt: 'abort' }, ctx()),
+  ).resolves.toMatchObject({
+    kind: 'dead',
+    reason: 'runagent-threw',
+  })
+})
+
+test('per-agent abort → non-retryable dead agent-cancelled result', async () => {
+  runAgentMock.set({
+    // biome-ignore lint/correctness/useYield: intentionally throws after local cancellation
+    runAgent: async function* (opts: {
+      override?: { abortController?: AbortController }
+    }) {
+      opts.override?.abortController?.abort()
+      const error = new Error('cancelled child')
+      error.name = 'AbortError'
+      throw error
+    },
+  } as unknown as RunAgentOverrides)
+
+  await expect(
+    claudeCodeBackend.run({ prompt: 'cancel child' }, ctx()),
+  ).resolves.toEqual({
+    kind: 'dead',
+    reason: 'agent-cancelled',
+    retryable: false,
+  })
+})
+
+test('parent workflow abort → WorkflowAbortedError', async () => {
+  const parentAbort = new AbortController()
+  runAgentMock.set({
+    // biome-ignore lint/correctness/useYield: intentionally throws after parent cancellation
+    runAgent: async function* () {
+      parentAbort.abort()
+      const error = new Error('aborted by parent')
+      error.name = 'AbortError'
+      throw error
+    },
+  } as unknown as RunAgentOverrides)
+
+  await expect(
+    claudeCodeBackend.run(
+      { prompt: 'abort workflow' },
+      { ...ctx(), signal: parentAbort.signal },
+    ),
+  ).rejects.toBeInstanceOf(WorkflowAbortedError)
+})
+
+test('registerAgentAbort/unregisterAgentAbort injection: key=ctx.agentId (number), controller from bridge', async () => {
+  // restore default mock (previous test changed it to throw AbortError)
+  runAgentMock.set({
+    runAgent: async function* () {
+      yield {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'agent-text' }] },
+      }
+    },
+  } as unknown as RunAgentOverrides)
+  const registered: Array<{ id: number; controller: AbortController }> = []
+  const unregistered: number[] = []
+  await claudeCodeBackend.run(
+    { prompt: 'wiring' },
+    {
+      ...ctx(),
+      agentId: 42,
+      registerAgentAbort: (id, ac) => registered.push({ id, controller: ac }),
+      unregisterAgentAbort: id => unregistered.push(id),
+    },
+  )
+  expect(registered).toHaveLength(1)
+  expect(registered[0]?.id).toBe(42) // engine numeric agentId (not coreAgentId string)
+  expect(registered[0]?.controller).toBeInstanceOf(AbortController)
+  expect(unregistered).toEqual([42]) // finally cleanup idempotent
+})
+
+test('cancel one parallel agent → sibling and follow-up finish, run stays completed', async () => {
+  let runAgentCalls = 0
+  runAgentMock.set({
+    runAgent: async function* (opts: {
+      override?: { abortController?: AbortController }
+    }) {
+      const call = runAgentCalls++
+      if (call === 0) {
+        const signal = opts.override?.abortController?.signal
+        await new Promise<void>((_resolve, reject) => {
+          const rejectAbort = (): void => {
+            const error = new Error('cancelled child')
+            error.name = 'AbortError'
+            reject(error)
+          }
+          if (signal?.aborted) rejectAbort()
+          else signal?.addEventListener('abort', rejectAbort, { once: true })
+        })
+      }
+      yield {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: `agent-${call}` }] },
+      }
+    },
+  } as unknown as RunAgentOverrides)
+
+  const parentAbort = new AbortController()
+  const agentControllers = new Map<number, AbortController>()
+  const events: ProgressEvent[] = []
+  const host = ctx().host
+  const registry = new AgentAdapterRegistry()
+    .register(claudeCodeBackend)
+    .default(claudeCodeBackend.id)
+  const ports: WorkflowPorts = {
+    agentAdapterRegistry: registry,
+    agentRunner: {
+      runAgentToResult: async () => {
+        throw new Error('adapter registry should handle every agent')
+      },
+    },
+    progressEmitter: { emit: event => void events.push(event) },
+    taskRegistrar: {
+      register: () => ({
+        runId: 'parallel-cancel',
+        signal: parentAbort.signal,
+      }),
+      complete: () => {},
+      fail: () => {},
+      kill: () => false,
+      registerAgentAbort: (_runId, agentId, controller) => {
+        agentControllers.set(agentId, controller)
+        if (agentControllers.size === 2) {
+          agentControllers.get(0)?.abort()
+        }
+      },
+      unregisterAgentAbort: (_runId, agentId) => {
+        agentControllers.delete(agentId)
+      },
+      pendingAction: () => null,
+    },
+    journalStore: {
+      read: async () => [],
+      append: async () => {},
+      truncate: async () => {},
+    },
+    permissionGate: { isAborted: () => false },
+    logger: { debug: () => {}, event: () => {}, warn: () => {} },
+    hostFactory: () => ({ handle: host, cwd: '/tmp', budgetTotal: null }),
+  }
+
+  const result = await runWorkflow({
+    script: `
+      const parallelResults = await parallel([
+        () => agent('cancel-me'),
+        () => agent('keep-going'),
+      ])
+      const followUp = await agent('follow-up')
+      return { parallelResults, followUp }
+    `,
+    runId: 'parallel-cancel',
+    ports,
+    host,
+    signal: parentAbort.signal,
+    cwd: '/tmp',
+    budgetTotal: null,
+    retryBackoffMs: 0,
+  })
+
+  expect(result).toEqual({
+    status: 'completed',
+    returnValue: {
+      parallelResults: [null, 'agent-text'],
+      followUp: 'agent-text',
+    },
+  })
+  expect(runAgentCalls).toBe(3)
+  expect(parentAbort.signal.aborted).toBe(false)
+  expect(agentControllers.size).toBe(0)
+  expect(
+    events.find(event => event.type === 'agent_done' && event.agentId === 0),
+  ).toMatchObject({
+    result: {
+      kind: 'dead',
+      reason: 'agent-cancelled',
+      retryable: false,
+    },
+  })
+  expect(
+    events.find(event => event.type === 'agent_done' && event.agentId === 1),
+  ).toMatchObject({ result: { kind: 'ok' } })
+  expect(
+    events.find(event => event.type === 'agent_done' && event.agentId === 2),
+  ).toMatchObject({ result: { kind: 'ok' } })
+  expect(events.at(-1)).toMatchObject({
+    type: 'run_done',
+    status: 'completed',
+  })
+})
+
+// query() surfaces terminal API errors as an assistant message (isApiErrorMessage) and ends the
+// generator without throwing. The backend must classify them as dead — previously the error text
+// was returned as the agent's "answer" (non-schema) or misclassified as no-structured-output (schema).
+
+test('terminal API error: prompt-too-long → dead retryable:false (deterministic, engine skips retry)', async () => {
+  runAgentMock.set({
+    runAgent: async function* () {
+      yield {
+        type: 'assistant',
+        isApiErrorMessage: true,
+        message: {
+          content: [{ type: 'text', text: 'Prompt is too long' }],
+        },
+      }
+    },
+  } as unknown as RunAgentOverrides)
+  const res = await claudeCodeBackend.run({ prompt: 'huge' }, ctx())
+  expect(res.kind).toBe('dead')
+  if (res.kind === 'dead') {
+    expect(res.reason).toBe('prompt-too-long')
+    expect(res.retryable).toBe(false)
+    expect(res.detail).toMatch(/Prompt is too long/)
+  }
+})
+
+test('terminal API error: other API error → dead reason api-error (transient, engine may retry)', async () => {
+  runAgentMock.set({
+    runAgent: async function* () {
+      yield {
+        type: 'assistant',
+        isApiErrorMessage: true,
+        message: {
+          content: [{ type: 'text', text: 'API Error: 529 overloaded' }],
+        },
+      }
+    },
+  } as unknown as RunAgentOverrides)
+  const res = await claudeCodeBackend.run({ prompt: 'x' }, ctx())
+  expect(res.kind).toBe('dead')
+  if (res.kind === 'dead') {
+    expect(res.reason).toBe('api-error')
+    expect(res.retryable).not.toBe(false)
+    expect(res.detail).toMatch(/529/)
+  }
+  // restore the default runAgent mock for any later run() in this process
+  runAgentMock.set({
+    runAgent: async function* () {
+      yield {
+        type: 'assistant',
+        message: { content: [{ type: 'text', text: 'agent-text' }] },
+      }
+    },
+  } as unknown as RunAgentOverrides)
+})
+
+test('id and capabilities shape', () => {
+  expect(claudeCodeBackend.id).toBe('claude-code')
+  expect(claudeCodeBackend.capabilities.structuredOutput).toBe(true)
+  expect(claudeCodeBackend.capabilities.tools).toBe(true)
+})
+
+test('resolveAgentDefinition: no agentType → WORKFLOW_AGENT fallback', () => {
+  const tuc = {
+    options: { agentDefinitions: { activeAgents: [] } },
+  } as never
+  expect(resolveAgentDefinition(undefined, tuc)).toBe(WORKFLOW_AGENT)
+})
+
+test('resolveAgentDefinition: hits activeAgents', () => {
+  const fake = { agentType: 'Explore', permissionMode: 'plan' } as never
+  const tuc = {
+    options: { agentDefinitions: { activeAgents: [fake] } },
+  } as never
+  expect(resolveAgentDefinition('Explore', tuc)).toBe(fake)
+  // miss still falls back
+  expect(resolveAgentDefinition('Nope', tuc)).toBe(WORKFLOW_AGENT)
+})
+
+test('mapWorkflowModel passthrough', () => {
+  expect(mapWorkflowModel(undefined)).toBeUndefined()
+  expect(mapWorkflowModel('claude-haiku-*')).toBe('claude-haiku-*')
+})
+
+test('extractStructuredOutput: valid JSON extracted; invalid returns null', () => {
+  expect(
+    extractStructuredOutput([
+      { type: 'text', text: 'prefix {"a":1,"b":2} suffix' },
+    ]),
+  ).toEqual({ a: 1, b: 2 })
+  expect(
+    extractStructuredOutput([{ type: 'text', text: 'no json here' }]),
+  ).toBeNull()
+  expect(extractStructuredOutput([])).toBeNull()
+})
+
+test('extractStructuredOutput: fenced code block (strip fence + strip language tag)', () => {
+  expect(
+    extractStructuredOutput([
+      {
+        type: 'text',
+        text: 'Here are the findings:\n```json\n{"findings":[{"title":"x"}]}\n```\nDone.',
+      },
+    ]),
+  ).toEqual({ findings: [{ title: 'x' }] })
+  // no language tag
+  expect(
+    extractStructuredOutput([{ type: 'text', text: '```\n{"a":1}\n```' }]),
+  ).toEqual({ a: 1 })
+})
+
+test('extractStructuredOutput: nested object (bracket-balanced scan; legacy indexOf/lastIndexOf would cross-block concat)', () => {
+  const text = 'Result: {"outer":{"inner":{"deep":true}},"n":3} trailing'
+  expect(extractStructuredOutput([{ type: 'text', text }])).toEqual({
+    outer: { inner: { deep: true } },
+    n: 3,
+  })
+})
+
+test('extractStructuredOutput: brackets inside strings are not counted as pairing', () => {
+  // } inside a string does not zero out depth, scan can skip to the real pairing }
+  const text = '{"note":"this } char is in a string","ok":true}'
+  expect(extractStructuredOutput([{ type: 'text', text }])).toEqual({
+    note: 'this } char is in a string',
+    ok: true,
+  })
+})
+
+test('extractStructuredOutput: escaped quotes do not break string boundary', () => {
+  const text = '{"escaped":"he said \\"hi\\"","n":1}'
+  expect(extractStructuredOutput([{ type: 'text', text }])).toEqual({
+    escaped: 'he said "hi"',
+    n: 1,
+  })
+})
+
+test('extractStructuredOutput: multiple JSON blocks → return first parse success', () => {
+  // first one unbalanced (no pairing }), skip to the second
+  const text = 'broken { stuff\n{"real":1}\n{"ignored":2}'
+  expect(extractStructuredOutput([{ type: 'text', text }])).toEqual({ real: 1 })
+})
+
+test('extractStructuredOutput: array / number / string / null do not count as object', () => {
+  expect(
+    extractStructuredOutput([{ type: 'text', text: '[1,2,3]' }]),
+  ).toBeNull()
+  expect(extractStructuredOutput([{ type: 'text', text: '42' }])).toBeNull()
+  expect(
+    extractStructuredOutput([{ type: 'text', text: '"raw string"' }]),
+  ).toBeNull()
+  expect(extractStructuredOutput([{ type: 'text', text: 'null' }])).toBeNull()
+})
+
+test('extractStructuredOutput: multiple text blocks → cross-block find first success', () => {
+  expect(
+    extractStructuredOutput([
+      { type: 'text', text: 'no json' },
+      { type: 'text', text: '```json\n{"k":"v"}\n```' },
+    ]),
+  ).toEqual({ k: 'v' })
+})
+
+test('extractStructuredOutput: broken JSON returns null (does not throw)', () => {
+  expect(
+    extractStructuredOutput([
+      { type: 'text', text: '{broken: missing quotes}' },
+    ]),
+  ).toBeNull()
+  expect(
+    extractStructuredOutput([{ type: 'text', text: '{"a":1,}' }]), // trailing comma — no syntax repair
+  ).toBeNull()
+})
+
+test('extractStructuredOutput: a rejected object is never mined for its nested values', () => {
+  // Regression, from a real research run. The agent emitted a well-formed top-level object whose
+  // prose contained one unescaped `"` (`属"扩张中的尾部收缩"`). The object balances, so the scan
+  // reached it — but JSON.parse rejects it. Resuming the scan one char later used to walk INTO the
+  // wreck and return the value of `fields` as a complete `kind:'ok'` answer: `search_audit` and the
+  // other top-level keys silently vanished and the workflow consumed the fragment as real data.
+  const text = [
+    '{',
+    '  "market": "US",',
+    '  "md_section": "结论:属"扩张中的尾部收缩",非系统性风险。",',
+    '  "fields": {"credit_cycle": {"stage": "扩张"}},',
+    '  "search_audit": {"legs": 2}',
+    '}',
+  ].join('\n')
+  expect(extractStructuredOutput([{ type: 'text', text }])).toBeNull()
+})
+
+test('scanStructuredOutput: reports the parse error rather than silently returning null', () => {
+  const scan = scanStructuredOutput([
+    { type: 'text', text: '{"market": "US", "note": "he said "hi" loudly"}' },
+  ])
+  expect(scan.value).toBeNull()
+  // Without this the caller only knows "no JSON found", which for a malformed answer is actively
+  // misleading — the JSON is right there. Both engines name the fault; only V8 gives a position.
+  expect(scan.malformed?.error).toMatch(/JSON/i)
+  expect(scan.malformed?.excerpt.length).toBeGreaterThan(0)
+})
+
+test('describeMalformed: excerpt centres on the position V8 reports, not the head', () => {
+  // Fed a synthetic V8 message on purpose: the suite runs on bun/JSC, which omits the position, so
+  // asserting through a live JSON.parse would silently test nothing on this runtime while the
+  // shipped bin (node/V8) takes the branch that matters.
+  const candidate = `{"pad": "${'x'.repeat(400)}", "note": "he said "BOOM" loudly"}`
+  const pos = candidate.indexOf('BOOM')
+  const d = describeMalformed(
+    candidate,
+    0,
+    `Expected ',' or '}' after property value in JSON at position ${pos}`,
+  )
+  expect(d?.excerpt).toContain('BOOM')
+  expect(d?.excerpt).not.toContain('"pad"') // the healthy head is exactly what must be cropped out
+})
+
+test('describeMalformed: prose that is not JSON-shaped is not reported as malformed', () => {
+  expect(describeMalformed('just narration', 0, undefined)).toBeUndefined()
+})
+
+test('scanStructuredOutput: no JSON at all reports no malformed candidate', () => {
+  const scan = scanStructuredOutput([{ type: 'text', text: 'just narration' }])
+  expect(scan.value).toBeNull()
+  expect(scan.malformed).toBeUndefined()
+})
+
+test('scanStructuredOutput: a valid object still wins over an earlier rejected one', () => {
+  // Skipping a failed candidate whole must not stop the scan: a later, valid top-level object
+  // is still the answer.
+  const scan = scanStructuredOutput([
+    { type: 'text', text: '{"a":1,}\n{"real":true}' },
+  ])
+  expect(scan.value).toEqual({ real: true })
+})

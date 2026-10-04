@@ -1,0 +1,56 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "resolveJsonModule": true,
+    "types": ["bun"],
+    "paths": {
+      "src/*": ["./src/*"],
+      "@open-claude-code/builtin-tools/*": ["./packages/builtin-tools/src/*"],
+      "@open-claude-code/builtin-tools": [
+        "./packages/builtin-tools/src/index.ts"
+      ],
+      "@open-claude-code/tool-runtime/*": ["./packages/tool-runtime/src/*"],
+      "@open-claude-code/tool-runtime": [
+        "./packages/tool-runtime/src/index.ts"
+      ],
+      "@open-claude-code/mcp-client/*": ["./packages/mcp-client/src/*"],
+      "@open-claude-code/mcp-client": ["./packages/mcp-client/src/index.ts"],
+      "@open-claude-code/agent-tools/*": ["./packages/agent-tools/src/*"],
+      "@open-claude-code/agent-tools": ["./packages/agent-tools/src/index.ts"],
+      "@open-claude-code/workflow-engine/*": [
+        "./packages/workflow-engine/src/*"
+      ],
+      "@open-claude-code/workflow-engine": [
+        "./packages/workflow-engine/src/index.ts"
+      ]
+    }
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "packages/**/*.ts",
+    "packages/**/*.tsx",
+    "demo/**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    // 基座既有的四个集成测试带着 28 个先于本仓库存在的类型错误。把 tests/ 纳入
+    // include 是为了让阡陌自己的测试受门禁保护（它当场抓到了一个被静默忽略的
+    // 无效选项）；这四个文件在修好之前先隔离，让欠账可见而不是让整棵树失去检查。
+    // 修它们属于基座维护面，不在阡陌工作范围内（CLAUDE.md §0）。
+    "tests/integration/cli-arguments.test.ts",
+    "tests/integration/tool-chain.test.ts",
+    "tests/integration/message-pipeline.test.ts",
+    "tests/integration/context-build.test.ts"
+  ]
+}

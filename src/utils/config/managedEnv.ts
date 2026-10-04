@@ -1,0 +1,259 @@
+import { isRemoteManagedSettingsEligible } from '../../services/remoteManagedSettings/syncCache.js'
+import { applyDeepSeekAnthropicWire } from '../model/deepseekWire.js'
+import { applyOpencodeWire } from '../model/opencodeWire.js'
+import { clearCACertsCache } from '../network/caCerts.js'
+import { getGlobalConfig } from './config.js'
+import { isEnvTruthy } from './envUtils.js'
+import {
+  isProviderManagedEnvVar,
+  SAFE_ENV_VARS,
+} from './managedEnvConstants.js'
+import { clearMTLSCache } from '../network/mtls.js'
+import { clearProxyCache, configureGlobalAgents } from '../network/proxy.js'
+import { isSettingSourceEnabled } from '../settings/constants.js'
+import {
+  getSettings_DEPRECATED,
+  getSettingsForSource,
+} from '../settings/settings.js'
+
+/**
+ * `claude ssh` remote: ANTHROPIC_UNIX_SOCKET routes auth through a -R forwarded
+ * socket to a local proxy, and the launcher sets a handful of placeholder auth
+ * env vars that the remote's ~/.claude settings.env MUST NOT clobber (see
+ * isAnthropicAuthEnabled). Strip them from any settings-sourced env object.
+ */
+function withoutSSHTunnelVars(
+  env: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!env || !process.env.ANTHROPIC_UNIX_SOCKET) return env || {}
+  const {
+    ANTHROPIC_UNIX_SOCKET: _1,
+    ANTHROPIC_BASE_URL: _2,
+    ANTHROPIC_API_KEY: _3,
+    ANTHROPIC_AUTH_TOKEN: _4,
+    CLAUDE_CODE_OAUTH_TOKEN: _5,
+    ...rest
+  } = env
+  return rest
+}
+
+/**
+ * When the host owns inference routing (sets
+ * CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST in spawn env), strip
+ * provider-selection / model-default vars from settings-sourced env so a
+ * user's ~/.claude/settings.json can't redirect requests away from the
+ * host-configured provider.
+ */
+function withoutHostManagedProviderVars(
+  env: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!env) return {}
+  if (!isEnvTruthy(process.env.CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST)) {
+    return env
+  }
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (!isProviderManagedEnvVar(key)) {
+      out[key] = value
+    }
+  }
+  return out
+}
+
+/**
+ * Snapshot of env keys present before any settings.env is applied — for CCD,
+ * these are the keys the desktop host set to orchestrate the subprocess.
+ * Settings must not override them (OTEL_LOGS_EXPORTER=console would corrupt
+ * the stdio JSON-RPC transport). Keys added LATER by user/project settings
+ * are not in this set, so mid-session settings.json changes still apply.
+ * Lazy-captured on first applySafeConfigEnvironmentVariables() call.
+ */
+let ccdSpawnEnvKeys: Set<string> | null | undefined
+
+function withoutCcdSpawnEnvKeys(
+  env: Record<string, string> | undefined,
+): Record<string, string> {
+  if (!env || !ccdSpawnEnvKeys) return env || {}
+  const out: Record<string, string> = {}
+  for (const [key, value] of Object.entries(env)) {
+    if (!ccdSpawnEnvKeys.has(key)) out[key] = value
+  }
+  return out
+}
+
+/**
+ * Compose the strip filters applied to every settings-sourced env object.
+ */
+function filterSettingsEnv(
+  env: Record<string, string> | undefined,
+): Record<string, string> {
+  return withoutCcdSpawnEnvKeys(
+    withoutHostManagedProviderVars(withoutSSHTunnelVars(env)),
+  )
+}
+
+/**
+ * Trusted setting sources whose env vars can be applied before the trust dialog.
+ *
+ * - userSettings (~/.claude/settings.json): controlled by the user, not project-specific
+ * - flagSettings (--settings CLI flag or SDK inline settings): explicitly passed by the user
+ * - policySettings (managed settings from enterprise API or local managed-settings.json):
+ *   controlled by IT/admin (highest priority, cannot be overridden)
+ *
+ * Project-scoped sources (projectSettings, localSettings) are excluded because they live
+ * inside the project directory and could be committed by a malicious actor to redirect
+ * traffic (e.g., ANTHROPIC_BASE_URL) to an attacker-controlled server.
+ */
+const TRUSTED_SETTING_SOURCES = [
+  'userSettings',
+  'flagSettings',
+  'policySettings',
+] as const
+
+/**
+ * Apply environment variables from trusted sources to process.env.
+ * Called before the trust dialog so that user/enterprise env vars like
+ * ANTHROPIC_BASE_URL take effect during first-run/onboarding.
+ *
+ * For trusted sources (user settings, managed settings, CLI flags), ALL env vars
+ * are applied — including ones like ANTHROPIC_BASE_URL that would be dangerous
+ * from project-scoped settings.
+ *
+ * For project-scoped sources (projectSettings, localSettings), only safe env vars
+ * from the SAFE_ENV_VARS allowlist are applied. These are applied after trust is
+ * fully established via applyConfigEnvironmentVariables().
+ */
+export function applySafeConfigEnvironmentVariables(): void {
+  // Capture CCD spawn-env keys before any settings.env is applied (once).
+  if (ccdSpawnEnvKeys === undefined) {
+    ccdSpawnEnvKeys =
+      process.env.CLAUDE_CODE_ENTRYPOINT === 'claude-desktop'
+        ? new Set(Object.keys(process.env))
+        : null
+  }
+
+  // Global config (~/.claude.json) is user-controlled. In CCD mode,
+  // filterSettingsEnv strips keys that were in the spawn env snapshot so
+  // the desktop host's operational vars (OTEL, etc.) are not overridden.
+  Object.assign(process.env, filterSettingsEnv(getGlobalConfig().env))
+
+  // Apply ALL env vars from trusted setting sources, policySettings last.
+  // Gate on isSettingSourceEnabled so SDK settingSources: [] (isolation mode)
+  // doesn't get clobbered by ~/.claude/settings.json env (gh#217). policy/flag
+  // sources are always enabled, so this only ever filters userSettings.
+  for (const source of TRUSTED_SETTING_SOURCES) {
+    if (source === 'policySettings') continue
+    if (!isSettingSourceEnabled(source)) continue
+    Object.assign(
+      process.env,
+      filterSettingsEnv(getSettingsForSource(source)?.env),
+    )
+  }
+
+  // Compute remote-managed-settings eligibility now, with userSettings and
+  // flagSettings env applied. Eligibility reads CLAUDE_CODE_USE_BEDROCK,
+  // ANTHROPIC_BASE_URL — both settable via settings.env.
+  // getSettingsForSource('policySettings') below consults the remote cache,
+  // which guards on this. The two-phase structure makes the ordering
+  // dependency visible: non-policy env → eligibility → policy env.
+  isRemoteManagedSettingsEligible()
+
+  Object.assign(
+    process.env,
+    filterSettingsEnv(getSettingsForSource('policySettings')?.env),
+  )
+
+  // Apply only safe env vars from the fully-merged settings (which includes
+  // project-scoped sources). For safe vars that also exist in trusted sources,
+  // the merged value (which may come from a higher-priority project source)
+  // will overwrite the trusted value — this is acceptable since these vars are
+  // in the safe allowlist. Only policySettings values are guaranteed to survive
+  // unchanged (it has the highest merge priority in both loops) — except
+  // provider-routing vars, which filterSettingsEnv strips from every source
+  // when CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST is set.
+  const settingsEnv = filterSettingsEnv(getSettings_DEPRECATED()?.env)
+  for (const [key, value] of Object.entries(settingsEnv)) {
+    if (SAFE_ENV_VARS.has(key.toUpperCase())) {
+      process.env[key] = value
+    }
+  }
+
+  applyDeepSeekAnthropicWire()
+  applyOpencodeWire()
+}
+
+/**
+ * The exact env map applyConfigEnvironmentVariables() assigns onto process.env:
+ * ~/.claude.json's env first, then the fully-merged settings env (user +
+ * project + local + flag + policy), each through the same strip filters.
+ *
+ * Exported for callers that must resolve a variable BEFORE trust is
+ * established, and need the value the process will actually end up with rather
+ * than the value process.env happens to hold right now. MCP `${VAR}`
+ * interpolation is the motivating case — see createSettingsAwareEnvLookup().
+ */
+export function getEffectiveSettingsEnv(): Record<string, string> {
+  return {
+    ...filterSettingsEnv(getGlobalConfig().env),
+    ...filterSettingsEnv(getSettings_DEPRECATED()?.env),
+  }
+}
+
+/**
+ * Resolver for `${VAR}` interpolation in MCP / LSP server configs.
+ *
+ * Those configs are parsed during startup — rootAction kicks the read off
+ * ~500 lines before showSetupScreens() — but the servers they describe only
+ * ever spawn after trust, which is also when applyConfigEnvironmentVariables()
+ * puts project-scoped settings.env into process.env. Resolving against
+ * process.env alone therefore froze `${FRED_API_KEY}` as a literal in the
+ * snapshot that got spawned, while the post-trust re-read (the
+ * useManageMCPConnections effect) expanded it properly — two different configs
+ * for one server, so connectToServer's config-keyed memoize missed and left
+ * two live child processes per server, the broken one answering tool calls.
+ *
+ * Reading settings here does not widen the trust boundary: nothing is executed
+ * at parse time, and the post-trust path already interpolated these same
+ * values. It only makes the result independent of *when* the parse ran.
+ *
+ * Settings win over the ambient process.env, mirroring the Object.assign
+ * direction in applyConfigEnvironmentVariables().
+ */
+export function createSettingsAwareEnvLookup(): (
+  name: string,
+) => string | undefined {
+  const settingsEnv = getEffectiveSettingsEnv()
+  return name => settingsEnv[name] ?? process.env[name]
+}
+
+/**
+ * Apply environment variables from settings to process.env.
+ * This applies ALL environment variables (except provider-routing vars when
+ * CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST is set — see filterSettingsEnv) and
+ * should only be called after trust is established. This applies potentially
+ * dangerous environment variables such as LD_PRELOAD, PATH, etc.
+ */
+export function applyConfigEnvironmentVariables(): void {
+  Object.assign(process.env, getEffectiveSettingsEnv())
+
+  // Both apply functions end here because every path that changes provider
+  // configuration funnels through one of them — startup, `/provider use`,
+  // telemetry re-init, the ACP session handshake. `getAPIProvider()` starts
+  // answering 'firstParty' the moment the DeepSeek keys land, so the mirror
+  // that makes that answer true has to land in the same breath. See
+  // applyDeepSeekAnthropicWire for what a missed re-run looks like.
+  applyDeepSeekAnthropicWire()
+  // Same contract for OpenCode, one degree worse: its lane is derived from
+  // OPENCODE_MODEL, so a settings change can move the session from the Anthropic
+  // client to the OpenAI one. The credential half is refreshed separately, on
+  // the async paths — this call only republishes the endpoint and model keys.
+  applyOpencodeWire()
+
+  // Clear caches so agents are rebuilt with the new env vars
+  clearCACertsCache()
+  clearMTLSCache()
+  clearProxyCache()
+
+  // Reconfigure proxy/mTLS agents to pick up any proxy env vars from settings
+  configureGlobalAgents()
+}

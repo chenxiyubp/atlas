@@ -1,0 +1,20 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · H 上的探针（systemd --user 模板单元，实例名 = minute | handshake | wake）。
+#
+# **这是模板**，由 `fleet-probe.sh install` 派生，三个同名 .timer 各触发一个实例。
+# 量什么、不量什么、数据落在哪，见 fleet-probe.sh 头注。
+#
+# OOMScoreAdjust=900：H 也是负责人的代理出口，内存打满时量具该排在被杀名单的前面。
+
+[Unit]
+Description=Qianmo beta fleet probe (%i)
+
+[Service]
+Type=oneshot
+Environment=QIANMO_BETA_ROOT=@BETA_ROOT@
+Environment=PATH=@BUN_DIR@:/usr/local/bin:/usr/bin:/bin
+ExecStart=@REPO_DIR@/demo/env/beta/ops/fleet-probe.sh %i
+OOMScoreAdjust=900
+TimeoutStartSec=300

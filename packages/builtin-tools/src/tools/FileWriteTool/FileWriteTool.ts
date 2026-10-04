@@ -1,0 +1,509 @@
+import { dirname, sep } from 'path'
+import { logEvent } from '@open-claude-code/tool-runtime/analytics.js'
+import type { AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS } from '@open-claude-code/tool-runtime/analytics.js'
+import {
+  redactSecrets,
+  scanForSecrets,
+} from '@open-claude-code/tool-runtime/secretScanner.js'
+import { isAutoManagedMemoryFile } from 'src/utils/memory/memoryFileDetection.js'
+import { z } from 'zod/v4'
+import { getFeatureValue_CACHED_MAY_BE_STALE } from '@open-claude-code/tool-runtime/featureGate.js'
+import { diagnosticTracker } from 'src/services/diagnosticTracking.js'
+import { clearDeliveredDiagnosticsForFile } from 'src/services/lsp/LSPDiagnosticRegistry.js'
+import { getLspServerManager } from 'src/services/lsp/manager.js'
+import { notifyVscodeFileUpdated } from 'src/services/mcp/vscodeSdkMcp.js'
+import {
+  activateConditionalSkillsForPaths,
+  addSkillDirectories,
+  discoverSkillDirsForPaths,
+} from 'src/skills/loadSkillsDir.js'
+import type { ToolUseContext } from '@open-claude-code/tool-runtime/Tool.js'
+import { buildTool, type ToolDef } from '@open-claude-code/tool-runtime/Tool.js'
+import { getCwd } from 'src/utils/filesystem/cwd.js'
+import { logForDebugging } from 'src/utils/telemetry/debug.js'
+import { countLinesChanged, getPatchForDisplay } from 'src/utils/text/diff.js'
+import { isEnvTruthy } from 'src/utils/config/envUtils.js'
+import { isENOENT } from '@open-claude-code/tool-runtime/errors.js'
+import {
+  getFileModificationTime,
+  writeTextContent,
+} from 'src/utils/filesystem/file.js'
+import {
+  fileHistoryEnabled,
+  fileHistoryTrackEdit,
+} from 'src/utils/filesystem/fileHistory.js'
+import { logFileOperation } from 'src/utils/telemetry/fileOperationAnalytics.js'
+import { readFileSyncWithMetadata } from 'src/utils/filesystem/fileRead.js'
+import { getFsImplementation } from 'src/utils/filesystem/fsOperations.js'
+import {
+  fetchSingleFileGitDiff,
+  type ToolUseDiff,
+} from 'src/utils/git/gitDiff.js'
+import { lazySchema } from '@open-claude-code/tool-runtime/lazySchema.js'
+import { logError } from 'src/utils/telemetry/log.js'
+import { expandPath } from 'src/utils/filesystem/path.js'
+import {
+  checkWritePermissionForTool,
+  matchingRuleForInput,
+} from 'src/utils/permissions/filesystem.js'
+import type { PermissionDecision } from '@open-claude-code/tool-runtime/permissions/PermissionResult.js'
+import { matchWildcardPattern } from 'src/utils/permissions/shellRuleMatching.js'
+import { FILE_UNEXPECTEDLY_MODIFIED_ERROR } from '../FileEditTool/constants.js'
+import { gitDiffSchema, hunkSchema } from '../FileEditTool/types.js'
+import { FILE_WRITE_TOOL_NAME, getWriteToolDescription } from './prompt.js'
+import {
+  getToolUseSummary,
+  isResultTruncated,
+  renderToolResultMessage,
+  renderToolUseErrorMessage,
+  renderToolUseMessage,
+  renderToolUseRejectedMessage,
+  userFacingName,
+} from './UI.js'
+
+const inputSchema = lazySchema(() =>
+  z.strictObject({
+    file_path: z
+      .string()
+      .describe(
+        'The absolute path to the file to write (must be absolute, not relative)',
+      ),
+    content: z.string().describe('The content to write to the file'),
+  }),
+)
+type InputSchema = ReturnType<typeof inputSchema>
+
+const outputSchema = lazySchema(() =>
+  z.object({
+    type: z
+      .enum(['create', 'update'])
+      .describe(
+        'Whether a new file was created or an existing file was updated',
+      ),
+    filePath: z.string().describe('The path to the file that was written'),
+    content: z.string().describe('The content that was written to the file'),
+    structuredPatch: z
+      .array(hunkSchema())
+      .describe('Diff patch showing the changes'),
+    originalFile: z
+      .string()
+      .nullable()
+      .describe(
+        'The original file content before the write (null for new files)',
+      ),
+    gitDiff: gitDiffSchema().optional(),
+    redactionNote: z
+      .string()
+      .optional()
+      .describe(
+        'Present when secrets were redacted from a Claude-managed memory file before writing',
+      ),
+  }),
+)
+type OutputSchema = ReturnType<typeof outputSchema>
+
+export type Output = z.infer<OutputSchema>
+export type FileWriteToolInput = InputSchema
+
+export const FileWriteTool = buildTool({
+  name: FILE_WRITE_TOOL_NAME,
+  searchHint: 'create or overwrite files',
+  maxResultSizeChars: 100_000,
+  strict: true,
+  async description() {
+    return 'Write a file to the local filesystem.'
+  },
+  userFacingName,
+  getToolUseSummary,
+  getActivityDescription(input) {
+    const summary = getToolUseSummary(input)
+    return summary ? `Writing ${summary}` : 'Writing file'
+  },
+  async prompt() {
+    return getWriteToolDescription()
+  },
+  renderToolUseMessage,
+  isResultTruncated,
+  get inputSchema(): InputSchema {
+    return inputSchema()
+  },
+  get outputSchema(): OutputSchema {
+    return outputSchema()
+  },
+  toAutoClassifierInput(input) {
+    return `${input.file_path}: ${input.content}`
+  },
+  getPath(input): string {
+    return input.file_path
+  },
+  backfillObservableInput(input) {
+    // hooks.mdx documents file_path as absolute; expand so hook allowlists
+    // can't be bypassed via ~ or relative paths.
+    if (typeof input.file_path === 'string') {
+      input.file_path = expandPath(input.file_path)
+    }
+  },
+  async preparePermissionMatcher({ file_path }) {
+    return pattern => matchWildcardPattern(pattern, file_path)
+  },
+  async checkPermissions(input, context): Promise<PermissionDecision> {
+    const appState = context.getAppState()
+    return checkWritePermissionForTool(
+      FileWriteTool,
+      input,
+      appState.toolPermissionContext,
+    )
+  },
+  renderToolUseRejectedMessage,
+  renderToolUseErrorMessage,
+  renderToolResultMessage,
+  extractSearchText() {
+    // Transcript render shows either content (create, via HighlightedCode)
+    // or a structured diff (update). The heuristic's 'content' allowlist key
+    // would index the raw content string even in update mode where it's NOT
+    // shown — phantom. Under-count: tool_use already indexes file_path.
+    return ''
+  },
+  async validateInput({ file_path, content }, toolUseContext: ToolUseContext) {
+    const fullFilePath = expandPath(file_path)
+
+    // Check if path should be ignored based on permission settings
+    const appState = toolUseContext.getAppState()
+    const denyRule = matchingRuleForInput(
+      fullFilePath,
+      appState.toolPermissionContext,
+      'edit',
+      'deny',
+    )
+    if (denyRule !== null) {
+      return {
+        result: false,
+        message:
+          'File is in a directory that is denied by your permission settings.',
+        errorCode: 1,
+      }
+    }
+
+    // A path covered by a Read deny rule cannot be written either. occ
+    // previously only checked the 'edit' axis, so a read-denied-but-not-edit-
+    // denied path was freely writable.
+    const readDenyRule = matchingRuleForInput(
+      fullFilePath,
+      appState.toolPermissionContext,
+      'read',
+      'deny',
+    )
+    if (readDenyRule !== null) {
+      return {
+        result: false,
+        message:
+          'File is covered by a Read deny rule in your permission settings and cannot be written.',
+        errorCode: 13,
+      }
+    }
+
+    // SECURITY: Skip filesystem operations for UNC paths to prevent NTLM credential leaks.
+    // On Windows, fs.existsSync() on UNC paths triggers SMB authentication which could
+    // leak credentials to malicious servers. Let the permission check handle UNC paths.
+    if (fullFilePath.startsWith('\\\\') || fullFilePath.startsWith('//')) {
+      return { result: true }
+    }
+
+    const fs = getFsImplementation()
+    let fileMtimeMs: number
+    try {
+      const fileStat = await fs.stat(fullFilePath)
+      // 预检：如果路径已是一个存在的目录，及时拒绝并给出指引
+      // 避免 AI 模型传入目录路径（如 my-docs/analysis/api/）后，
+      // Write 工具先 mkdir 再写文件时抛出原始 EISDIR 错误，
+      // 导致模型不知如何处理、可能误删目录内容。
+      if (fileStat.isDirectory()) {
+        return {
+          result: false,
+          message: `Cannot write to '${file_path}': the specified path is an existing directory. To write a file inside this directory, use a path that includes a filename with extension, e.g. '${file_path}/<filename>.md'. Use Bash ls to list existing files in this directory.`,
+          errorCode: 5,
+        }
+      }
+      fileMtimeMs = fileStat.mtimeMs
+    } catch (e) {
+      if (isENOENT(e)) {
+        return { result: true }
+      }
+      throw e
+    }
+
+    const readTimestamp = toolUseContext.readFileState.get(fullFilePath)
+
+    // Read-before-write: the file EXISTS here (a fresh create returned above on
+    // ENOENT), so overwriting it requires a prior real Read. `isPartialView`
+    // entries (context-injected CLAUDE.md / truncated MEMORY.md — only a
+    // partial view) do NOT count; the must-Read-first invariant is documented
+    // on FileState.isPartialView. Without this guard an existing-but-unread
+    // file fails later in call() with the misleading "File has been
+    // unexpectedly modified."
+    if (!readTimestamp || readTimestamp.isPartialView) {
+      return {
+        result: false,
+        message:
+          'File has not been read yet. Read it first before writing to it.',
+        errorCode: 2,
+      }
+    }
+
+    // Reuse mtime from the stat above — avoids a redundant statSync via
+    // getFileModificationTime.
+    const lastWriteTime = Math.floor(fileMtimeMs)
+    if (lastWriteTime > readTimestamp.timestamp) {
+      return {
+        result: false,
+        message:
+          'File has been modified since read, either by the user or by a linter. Read it again before attempting to write it.',
+        errorCode: 3,
+      }
+    }
+
+    return { result: true }
+  },
+  async call(
+    { file_path, content },
+    { readFileState, updateFileHistoryState, dynamicSkillDirTriggers },
+    _,
+    parentMessage,
+  ) {
+    const fullFilePath = expandPath(file_path)
+    const dir = dirname(fullFilePath)
+
+    // Discover skills from this file's path (fire-and-forget, non-blocking)
+    const cwd = getCwd()
+    const newSkillDirs = await discoverSkillDirsForPaths([fullFilePath], cwd)
+    if (newSkillDirs.length > 0) {
+      // Store discovered dirs for attachment display
+      for (const dir of newSkillDirs) {
+        dynamicSkillDirTriggers?.add(dir)
+      }
+      // Don't await - let skill loading happen in the background
+      addSkillDirectories(newSkillDirs).catch(() => {})
+    }
+
+    // Activate conditional skills whose path patterns match this file
+    activateConditionalSkillsForPaths([fullFilePath], cwd)
+
+    await diagnosticTracker.beforeFileEdited(fullFilePath)
+
+    // Ensure parent directory exists before the atomic read-modify-write section.
+    // Must stay OUTSIDE the critical section below (a yield between the staleness
+    // check and writeTextContent lets concurrent edits interleave), and BEFORE the
+    // write (lazy-mkdir-on-ENOENT would fire a spurious tengu_atomic_write_error
+    // inside writeFileSyncAndFlush_DEPRECATED before ENOENT propagates back).
+    await getFsImplementation().mkdir(dir)
+    if (fileHistoryEnabled()) {
+      // Backup captures pre-edit content — safe to call before the staleness
+      // check (idempotent v1 backup keyed on content hash; if staleness fails
+      // later we just have an unused backup, not corrupt state).
+      await fileHistoryTrackEdit(
+        updateFileHistoryState,
+        fullFilePath,
+        parentMessage.uuid,
+      )
+    }
+
+    // Load current state and confirm no changes since last read.
+    // Please avoid async operations between here and writing to disk to preserve atomicity.
+    let meta: ReturnType<typeof readFileSyncWithMetadata> | null
+    try {
+      meta = readFileSyncWithMetadata(fullFilePath)
+    } catch (e) {
+      if (isENOENT(e)) {
+        meta = null
+      } else {
+        throw e
+      }
+    }
+
+    if (meta !== null) {
+      const lastWriteTime = getFileModificationTime(fullFilePath)
+      const lastRead = readFileState.get(fullFilePath)
+      if (!lastRead || lastWriteTime > lastRead.timestamp) {
+        // Timestamp indicates modification, but on Windows timestamps can change
+        // without content changes (cloud sync, antivirus, etc.). For full reads,
+        // compare content as a fallback to avoid false positives.
+        const isFullRead =
+          lastRead &&
+          lastRead.offset === undefined &&
+          lastRead.limit === undefined
+        // meta.content is CRLF-normalized — matches readFileState's normalized form.
+        if (!isFullRead || meta.content !== lastRead.content) {
+          throw new Error(FILE_UNEXPECTEDLY_MODIFIED_ERROR)
+        }
+      }
+    }
+
+    const enc = meta?.encoding ?? 'utf8'
+    const oldContent = meta?.content ?? null
+
+    // Claude-managed memory persists across sessions and is injected into
+    // future model requests (multi-provider → cross-vendor leak surface).
+    // Redact high-confidence secrets (gitleaks subset) before they land on
+    // disk; a note in the tool result tells the model what happened. Scoped
+    // to auto-managed memory only — user-owned files (CLAUDE.md, code) are
+    // written verbatim.
+    let finalContent = content
+    let redactionNote: string | undefined
+    if (isAutoManagedMemoryFile(fullFilePath)) {
+      const secretMatches = scanForSecrets(content)
+      if (secretMatches.length > 0) {
+        finalContent = redactSecrets(content)
+        const labels = secretMatches.map(m => m.label).join(', ')
+        redactionNote = `Note: ${secretMatches.length} potential secret(s) (${labels}) were redacted before saving — memory files persist across sessions and may be included in future model requests.`
+        // ruleIds only — the scanner never returns matched values
+        logEvent('tengu_memdir_secret_redacted', {
+          ruleIds: secretMatches
+            .map(m => m.ruleId)
+            .join(
+              ',',
+            ) as AnalyticsMetadata_I_VERIFIED_THIS_IS_NOT_CODE_OR_FILEPATHS,
+        })
+      }
+    }
+
+    // Write is a full content replacement — the model sent explicit line endings
+    // in `content` and meant them. Do not rewrite them. Previously we preserved
+    // the old file's line endings (or sampled the repo via ripgrep for new
+    // files), which silently corrupted e.g. bash scripts with \r on Linux when
+    // overwriting a CRLF file or when binaries in cwd poisoned the repo sample.
+    writeTextContent(fullFilePath, finalContent, enc, 'LF')
+
+    // Notify LSP servers about file modification (didChange) and save (didSave)
+    const lspManager = getLspServerManager()
+    if (lspManager) {
+      // Clear previously delivered diagnostics so new ones will be shown
+      clearDeliveredDiagnosticsForFile(`file://${fullFilePath}`)
+      // didChange: Content has been modified
+      lspManager.changeFile(fullFilePath, finalContent).catch((err: Error) => {
+        logForDebugging(
+          `LSP: Failed to notify server of file change for ${fullFilePath}: ${err.message}`,
+        )
+        logError(err)
+      })
+      // didSave: File has been saved to disk (triggers diagnostics in TypeScript server)
+      lspManager.saveFile(fullFilePath).catch((err: Error) => {
+        logForDebugging(
+          `LSP: Failed to notify server of file save for ${fullFilePath}: ${err.message}`,
+        )
+        logError(err)
+      })
+    }
+
+    // Notify VSCode about the file change for diff view
+    notifyVscodeFileUpdated(fullFilePath, oldContent, finalContent)
+
+    // Update read timestamp, to invalidate stale writes
+    readFileState.set(fullFilePath, {
+      content: finalContent,
+      timestamp: getFileModificationTime(fullFilePath),
+      offset: undefined,
+      limit: undefined,
+    })
+
+    // Log when writing to CLAUDE.md
+    if (fullFilePath.endsWith(`${sep}CLAUDE.md`)) {
+      logEvent('tengu_write_claudemd', {})
+    }
+
+    let gitDiff: ToolUseDiff | undefined
+    if (
+      isEnvTruthy(process.env.CLAUDE_CODE_REMOTE) &&
+      getFeatureValue_CACHED_MAY_BE_STALE('tengu_quartz_lantern', false)
+    ) {
+      const startTime = Date.now()
+      const diff = await fetchSingleFileGitDiff(fullFilePath)
+      if (diff) gitDiff = diff
+      logEvent('tengu_tool_use_diff_computed', {
+        isWriteTool: true,
+        durationMs: Date.now() - startTime,
+        hasDiff: !!diff,
+      })
+    }
+
+    if (oldContent) {
+      const patch = getPatchForDisplay({
+        filePath: file_path,
+        fileContents: oldContent,
+        edits: [
+          {
+            old_string: oldContent,
+            new_string: finalContent,
+            replace_all: false,
+          },
+        ],
+      })
+
+      const data = {
+        type: 'update' as const,
+        filePath: file_path,
+        content: finalContent,
+        structuredPatch: patch,
+        originalFile: oldContent,
+        ...(gitDiff && { gitDiff }),
+        ...(redactionNote && { redactionNote }),
+      }
+      // Track lines added and removed for file updates, right before yielding result
+      countLinesChanged(patch)
+
+      logFileOperation({
+        operation: 'write',
+        tool: 'FileWriteTool',
+        filePath: fullFilePath,
+        type: 'update',
+      })
+
+      return {
+        data,
+      }
+    }
+
+    const data = {
+      type: 'create' as const,
+      filePath: file_path,
+      content: finalContent,
+      structuredPatch: [],
+      originalFile: null,
+      ...(gitDiff && { gitDiff }),
+      ...(redactionNote && { redactionNote }),
+    }
+
+    // For creation of new files, count all lines as additions, right before yielding the result
+    countLinesChanged([], finalContent)
+
+    logFileOperation({
+      operation: 'write',
+      tool: 'FileWriteTool',
+      filePath: fullFilePath,
+      type: 'create',
+    })
+
+    return {
+      data,
+    }
+  },
+  mapToolResultToToolResultBlockParam(
+    { filePath, type, redactionNote },
+    toolUseID,
+  ) {
+    const note = redactionNote ? `\n${redactionNote}` : ''
+    switch (type) {
+      case 'create':
+        return {
+          tool_use_id: toolUseID,
+          type: 'tool_result',
+          content: `File created successfully at: ${filePath}${note}`,
+        }
+      case 'update':
+        return {
+          tool_use_id: toolUseID,
+          type: 'tool_result',
+          content: `The file ${filePath} has been updated successfully.${note}`,
+        }
+    }
+  },
+} satisfies ToolDef<InputSchema, Output>)

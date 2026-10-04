@@ -1,0 +1,27 @@
+{
+  "name": "@qianmo/adapter",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "license": "AGPL-3.0-or-later",
+  "description": "Qianmo last-hop adapter: inbound mailbox delivery, read-flip observation and the blob staging area.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./inbound": "./src/inbound.ts",
+    "./names": "./src/names.ts",
+    "./sanitize": "./src/sanitize.ts",
+    "./wrapper": "./src/wrapper.ts"
+  },
+  "files": [
+    "src"
+  ],
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@qianmo/protocol": "workspace:*"
+  }
+}

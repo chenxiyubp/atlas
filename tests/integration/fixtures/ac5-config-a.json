@@ -1,0 +1,10 @@
+[
+  {
+    "id": "qianmo-ac5",
+    "kind": "openai-compat",
+    "baseUrl": "https://api.cornna.xyz/v1",
+    "apiKeyEnv": "OPENAI_API_KEY",
+    "defaultModel": "deepseek-v4-pro",
+    "compatRule": "deepseek"
+  }
+]

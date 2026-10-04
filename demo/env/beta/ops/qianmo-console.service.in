@@ -1,0 +1,48 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · H 上的控制台（systemd --user 单元）。
+#
+# **这是模板**，装好的那一份由 `beta-up.sh --role host` 派生，见
+# qianmo-registry.service.in 头注——那里还写着「为什么调仓库脚本」与「oneshot 保证什么」，
+# 两条对本单元同样成立。
+#
+# ── 启动参数怎么活过一次重启 ─────────────────────────────────────────────────
+# 控制台的策略开关（`--wake-sign`、`--require-signed-tasks`…）走 beta-up.sh 的尾参透传
+# （issue #38）。它们不能写死在这里：写死了就是第二处真源。所以 beta-up.sh 每次起 H 腿
+# 都把**那一趟的尾参**落进 @OPS_DIR@/console.env 的 CONSOLE_EXTRA_ARGS，下面用 `$` 而不是
+# `${}` 引用——systemd 只对 `$VAR` 这种写法做分词，`${VAR}` 会整串当成一个参数。
+#
+# 于是「单元带什么参数」= 「最后一次 beta-up.sh --role host 带了什么参数」。不带尾参跑一
+# 次就等于把它们撤掉，beta-up.sh 会在那时 WARN 出被撤掉的那几个——签名唤醒被静默关掉是
+# 这里唯一一个会让人以为还开着的方向。
+#
+# ── Requires= 注册中心 ───────────────────────────────────────────────────────
+# 控制台把注册中心当数据源。反过来的顺序（§7.1）会让开机后头几十秒的页面是空的，而那
+# 个空页面和「注册中心真的没起来」长得一模一样。
+
+# ── 这个单元的状态不是存活判据（issue #64）──────────────────────────────────
+# 两个方向都不是，见 qianmo-registry.service.in 同名那一节。判死活只有一条：
+#   curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:38621/v0/health   # 要 200
+# 那条路径公开、零鉴权，`beta-smoke.sh --role host` 的第③项问的就是它。
+
+[Unit]
+Description=Qianmo beta console on H (oneshot; unit state is NOT a liveness signal, GET /v0/health is)
+After=network-online.target @REGISTRY_UNIT@
+Wants=network-online.target
+Requires=@REGISTRY_UNIT@
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+# 前缀 `-`：文件还没生成时（先起注册中心那一趟）不算失败，
+# $CONSOLE_EXTRA_ARGS 展开成零个参数——那正是「没有额外开关」的意思。
+EnvironmentFile=-@OPS_DIR@/console.env
+Environment=QIANMO_BETA_ROOT=@BETA_ROOT@
+Environment=PATH=@UNIT_PATH_ENV@
+ExecStart=@REPO_DIR@/demo/env/beta/beta-up.sh --role host --only console -- $CONSOLE_EXTRA_ARGS
+ExecStop=@REPO_DIR@/demo/env/beta/beta-down.sh console
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target

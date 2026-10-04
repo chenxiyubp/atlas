@@ -1,0 +1,150 @@
+/**
+ * useProactive — React hook that drives tick generation for proactive mode.
+ *
+ * Mounted inside REPL.tsx when feature('PROACTIVE') || feature('KAIROS').
+ * Generates <tick>HH:MM:SS</tick> prompts at a fixed interval while
+ * proactive mode is active and not blocked.
+ */
+import { useEffect, useRef } from 'react'
+import type { QueuedCommand } from '../types/textInputTypes.js'
+import { TICK_TAG } from '../constants/xml.js'
+import { getCwd } from '../utils/filesystem/cwd.js'
+import { cancelQueuedAutonomyCommands } from '../utils/agents/autonomyQueueLifecycle.js'
+import { createProactiveAutonomyCommands } from '../utils/agents/autonomyRuns.js'
+import { logForDebugging } from '../utils/telemetry/debug.js'
+import {
+  isProactiveActive,
+  isProactivePaused,
+  isContextBlocked,
+  setNextTickAt,
+  shouldTick,
+} from './index.js'
+
+/** Default interval between ticks (ms). Prompt cache TTL is ~5 min so we
+ *  stay well under that to keep the cache warm. */
+const TICK_INTERVAL_MS = 30_000
+
+type UseProactiveOpts = {
+  isLoading: boolean
+  queuedCommandsLength: number
+  hasActiveLocalJsxUI: boolean
+  isInPlanMode: boolean
+  /** Live terminal focus state, read at tick-creation time. */
+  getIsTerminalFocused: () => boolean
+  onQueueTick: (command: QueuedCommand) => void
+}
+
+export function useProactive(opts: UseProactiveOpts): void {
+  const optsRef = useRef(opts)
+  optsRef.current = opts
+
+  useEffect(() => {
+    if (!isProactiveActive()) return
+
+    let timer: ReturnType<typeof setTimeout> | null = null
+    let disposed = false
+    let generating = false
+
+    function scheduleTick(): void {
+      const nextTs = Date.now() + TICK_INTERVAL_MS
+      setNextTickAt(nextTs)
+
+      timer = setTimeout(() => {
+        timer = null
+
+        // Guard: skip tick if any blocking condition is met
+        if (!shouldTick()) {
+          // Reschedule — conditions may clear later
+          scheduleTick()
+          return
+        }
+
+        const {
+          isLoading,
+          queuedCommandsLength,
+          hasActiveLocalJsxUI,
+          isInPlanMode,
+        } = optsRef.current
+
+        // Don't fire while a query is in-flight, plan mode is active,
+        // a local JSX UI is showing, or commands are queued
+        if (
+          isLoading ||
+          isInPlanMode ||
+          hasActiveLocalJsxUI ||
+          queuedCommandsLength > 0 ||
+          generating
+        ) {
+          scheduleTick()
+          return
+        }
+
+        generating = true
+        // Cache invariant: focus state rides on the per-turn tick (the tail
+        // of the conversation) instead of the head userContext. As a head
+        // userContext key it was added/removed whenever the terminal
+        // gained/lost focus, which rewrote the FIRST user message's bytes and
+        // busted the prompt cache for the entire message history on every
+        // focus flip. A tail marker carries the same information at a
+        // prefix-safe position.
+        const focused = optsRef.current.getIsTerminalFocused()
+        void (async () => {
+          const commands = await createProactiveAutonomyCommands({
+            basePrompt: `<${TICK_TAG}>${new Date().toLocaleTimeString()}${focused ? '' : ' [terminal unfocused]'}</${TICK_TAG}>`,
+            currentDir: getCwd(),
+            shouldCreate: () => !disposed,
+          })
+          if (disposed) {
+            await cancelQueuedAutonomyCommands({ commands })
+            return
+          }
+          const queuedCommands: QueuedCommand[] = []
+          try {
+            for (const command of commands) {
+              // Always queue proactive turns. This avoids races where the prompt
+              // is built asynchronously, a user turn starts meanwhile, and a
+              // direct-submit path would silently drop the autonomy turn after
+              // consuming its heartbeat due-state.
+              optsRef.current.onQueueTick(command)
+              queuedCommands.push(command)
+            }
+          } catch (error) {
+            await cancelQueuedAutonomyCommands({
+              commands: commands.filter(
+                command => !queuedCommands.includes(command),
+              ),
+            })
+            throw error
+          }
+        })()
+          .catch(error =>
+            logForDebugging(`[Proactive] failed to create tick: ${error}`, {
+              level: 'error',
+            }),
+          )
+          .finally(() => {
+            generating = false
+          })
+
+        // Schedule next tick
+        scheduleTick()
+      }, TICK_INTERVAL_MS)
+    }
+
+    scheduleTick()
+
+    return () => {
+      disposed = true
+      if (timer !== null) {
+        clearTimeout(timer)
+        timer = null
+      }
+      setNextTickAt(null)
+    }
+  }, [
+    // Re-mount when proactive state changes
+    isProactiveActive(),
+    isProactivePaused(),
+    isContextBlocked(),
+  ])
+}

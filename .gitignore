@@ -1,0 +1,83 @@
+node_modules
+.DS_Store
+dist
+coverage
+.env
+*.log
+.idea
+.vscode/*
+!.vscode/extensions.json
+*.suo
+*.lock
+src/utils/vendor/
+
+# AI tool runtime directories
+.agents/
+.claude/
+# occ's own project-level directory. Blanket-ignored like .claude/ above;
+# anything meant to be team-shared (skills/, agents/, settings.json) is
+# force-added with `git add -f`, which is how .claude/ is tracked today.
+.occ/
+.omx/
+.docs/task/
+# Binary / screenshot files (root only)
+/*.png
+*.bmp
+
+# Internal system prompt documents
+Claude-Opus-*.txt
+Claude-Sonnet-*.txt
+Claude-Haiku-*.txt
+
+# Agent / tool state dirs
+.swarm/
+.agents/__pycache__/
+
+# Python bytecode
+__pycache__/
+*.pyc
+logs
+
+data
+.omc
+.codex/*
+!.codex/agents/
+!.codex/agents/**
+!.codex/skills/
+!.codex/skills/**
+.codex/skills/.system/**
+!.codex/prompts/
+!.codex/prompts/**
+teach-me
+credentials.json
+
+# Session-scoped progress / state files written by agents and skills
+# (autofix-pr persistence, test-progress checkpoint, recovery notes).
+# Transient, never meant to enter the repo.
+.claude-impl-state.md
+.claude-progress.md
+.claude-recovery.md
+.test-progress.md
+.squash-tmp/
+.git.*-backup
+scripts/system-prompt-dump.txt
+
+# Playwright MCP browser-testing scratch output. Transient, never meant to
+# enter the repo.
+.playwright-mcp/
+
+# 阡陌演示环境（demo/env/）的运行态：密钥、节点配置根、日志、工作区。
+# 由 demo/env/seed.sh 生成，永不入库。
+.demo-env/
+
+# VCR 卡带（src/services/vcr.ts）的默认落点：CLAUDE_CODE_TEST_FIXTURES_ROOT
+# 未显式设置时即为 cwd，本地跑 `bun test` 往往就落在仓库根的 fixtures/ 下，
+# 产生未预期的真实录制。锚定到根目录（/fixtures/），不影响 tests/mocks/fixtures、
+# tests/integration/fixtures 等各处手工维护的同名目录。确实需要入库的卡带用
+# `git add -f` 显式带入 —— 现有的 fixtures/token-count-*.json 就是这样进库的。
+/fixtures/
+
+# scripts/test-shards.sh 每个分片的 JUnit XML（用例名 + 逐条耗时）。每次跑都会
+# 先整个清掉再重建，本地跑一次就有 62 个文件——留档靠 CI 的 artifact，不入库。
+# 锚定到根目录：脚本只往仓库根的这一处写。
+/test-reports/

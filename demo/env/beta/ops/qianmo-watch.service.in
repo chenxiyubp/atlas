@@ -1,0 +1,33 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · H 上的值守作业调度器（`qm watch`，systemd --user 单元，P13.6）。
+#
+# **这是模板**，由 `watch-hub.sh install` 派生。参数（目标节点、--from、是否签名）在
+# <内测根>/ops/watch.env，作业在 <内测根>/watch/jobs.json，PSK 由 `watch-hub.sh run` 从
+# secrets/peers/<节点>.psk 读进环境——单元里没有任何密钥，也没有密钥路径以外的东西。
+# 配置根、一个进程一把 PSK、先 trust 后 --sign 这三条，见 watch-hub.sh 头注。
+#
+# Type=exec + Restart=on-failure：调度器的状态在磁盘上（state.json 与 claims/），重起不重放
+# 已经 fire 过的格；停机期间错过的格按「补跑塌缩」计数（console.md §10、roadmap F7）。
+# 正常退出（例如有人手动 stop）不拉回来。
+# OOMScoreAdjust=900：H 同时是负责人的代理出口，内存打满时值守该排在被杀名单的前面。
+# 停手不必停单元：touch <内测根>/nodes/console/config/qianmo/scheduler/ESTOP。
+
+[Unit]
+Description=Qianmo beta hub watch jobs (qm watch; timing lives on the hub)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+Environment=QIANMO_BETA_ROOT=@BETA_ROOT@
+Environment=PATH=@BUN_DIR@:/usr/local/bin:/usr/bin:/bin
+ExecStart=@REPO_DIR@/demo/env/beta/ops/watch-hub.sh run
+Restart=on-failure
+RestartSec=30
+OOMScoreAdjust=900
+
+[Install]
+WantedBy=default.target

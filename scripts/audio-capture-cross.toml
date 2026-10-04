@@ -1,0 +1,35 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# cross(1) 配置：Linux 交叉构建 audio-capture 原生模块所需的 pre-build 步骤。
+#
+# 放在这里而不是仓库根或 packages/audio-capture-napi/native/ 的理由：
+#   - native/ 由 Rust 那半边的 worker 独立维护，不该有 build 脚本这边的文件混进去；
+#   - 放仓库根会让人误以为"任何人在这个仓库跑裸 cross build 都会自动生效"——
+#     实际上 cross 默认只在 Cargo.toml 所在目录（即 native/ 本身）找 Cross.toml，
+#     并不会向上翻到仓库根（已实测：从仓库根 cd 到 native/ 后跑
+#     `cross build --manifest-path .../native/Cargo.toml`，不设 CROSS_CONFIG 时
+#     不会应用这份配置）。这份文件之所以生效，唯一途径是
+#     scripts/build-audio-capture.sh 在调用 cross 前显式导出
+#     `CROSS_CONFIG=<此文件路径>`（已实测：cross 会在 Docker buildx 里执行
+#     CROSS_CONFIG 指向文件里对应 target 的 pre-build 命令，与文件实际所在
+#     目录无关）。放在 scripts/ 下、用专属文件名（不叫裸的 Cross.toml），是为了
+#     不让人误以为它会被裸 `cross` 命令自动发现。
+#
+# 根因：cross 官方 x86_64-unknown-linux-gnu / aarch64-unknown-linux-gnu 镜像
+# 不含 libasound2-dev，而 cpal 在 Linux 上必然经 alsa-sys 链接系统 ALSA
+# （libasound.so + alsa.pc），缺了它 alsa-sys 的 build script 直接报
+# "The system library `alsa` required by crate `alsa-sys` was not found."。
+# 两个 target 都要装。
+
+[target.x86_64-unknown-linux-gnu]
+pre-build = [
+  "dpkg --add-architecture $CROSS_DEB_ARCH",
+  "apt-get update && apt-get install --assume-yes libasound2-dev:$CROSS_DEB_ARCH",
+]
+
+[target.aarch64-unknown-linux-gnu]
+pre-build = [
+  "dpkg --add-architecture $CROSS_DEB_ARCH",
+  "apt-get update && apt-get install --assume-yes libasound2-dev:$CROSS_DEB_ARCH",
+]

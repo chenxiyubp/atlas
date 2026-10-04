@@ -1,0 +1,47 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · H → 节点 %i 的本地转发隧道（systemd --user 模板单元）。
+#
+# **这是模板，不是装好的那一份。**`beta-up.sh --role host` 把 @…@ 占位符换掉之后写进
+# <内测根>/ops/ 与 ~/.config/systemd/user/。直接改装好的那两份没有意义——下一次
+# beta-up.sh 会照本文件重新派生。要改就改这里，或者改 peers.conf 的 node 坐标行。
+#
+# ── 为什么需要它 ─────────────────────────────────────────────────────────────
+# 节点机的入站端口被云厂商安全组挡着（实测：22/80/443 通，节点入站端口与另外十个
+# 候选端口全不通），短期拿不到放行。隧道把节点的 127.0.0.1:<入站端口> 映到 H 的回环
+# 口上，于是注册中心与控制台照旧只拨回环地址，**应用层一行代码不改**。
+#
+# 隧道是「直连不通时的兜底」，不是默认形态：没有 node 坐标行的节点仍然直连
+# （node-provisioning.md §0 第 12 条的控制面 / 数据面分工）。
+#
+# ── ExitOnForwardFailure=yes 是这里最重要的一个选项 ─────────────────────────
+# 没有它，本地端口被占时 ssh 会**连上、不转发、且进程活着** —— 单元显示 active、
+# 拨号全部超时，最难查的那种假绿。
+#
+# 注意它挡不住另一种假绿：转发建立成功、但节点侧那个端口没人监听。那时 ssh 照样
+# 在本地 LISTEN，每一条连接都被 accept 之后立刻关掉，于是**任何 TCP 探测都是绿的**。
+# 那一条由 common.sh 的 beta_endpoint_live（真读一次应答字节）来判，不是这里。
+
+# ── $TUNNEL_EXTRA_ARGS 不带花括号是有意的 ─────────────────────────────────────
+# 其余变量都是 `${VAR}`（整串一个参数）；这一个要按空白分词成零个或多个参数（审计
+# 见证的 `-R 127.0.0.1:<口>:127.0.0.1:<口>`，没配就是零个），systemd 只对 `$VAR` 这种
+# 写法分词。旧版 beta-up.sh 写的 tunnel-<node>.env 里没有这个键，展开成零个参数，行为不变。
+
+[Unit]
+Description=Qianmo beta SSH tunnel to node %i (H loopback -> node %i inbound port)
+After=network-online.target
+Wants=network-online.target
+# 隧道断了要一直重试到通为止：节点重启 / 网络抖动时不能让 systemd 因为「短时间内
+# 重启太多次」把单元丢进 failed 就不管了。
+StartLimitIntervalSec=0
+
+[Service]
+Type=exec
+EnvironmentFile=@OPS_DIR@/tunnel-%i.env
+ExecStart=/usr/bin/ssh -i ${NODE_SSH_KEY} -N -T -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new -o ExitOnForwardFailure=yes -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -o TCPKeepAlive=yes -o ConnectTimeout=15 -p ${NODE_SSH_PORT} -L 127.0.0.1:${LOCAL_PORT}:127.0.0.1:${REMOTE_PORT} $TUNNEL_EXTRA_ARGS ${NODE_SSH_USER}@${NODE_SSH_HOST}
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

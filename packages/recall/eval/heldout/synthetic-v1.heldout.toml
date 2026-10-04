@@ -1,0 +1,205 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+schema = "qianmo-recall-heldout/v1"
+corpus = "synthetic-v1"
+author = "独立代理（未接触检索实现）"
+
+[[questions]]
+id = "ho-runtime-1"
+gold = "runtime"
+question = "咱们这个仓库装依赖、执行单元用例，默认拿哪个 JS 工具链？"
+
+[[questions]]
+id = "ho-runtime-2"
+gold = "runtime"
+question = "为什么不让混用 yarn 之类的包管理器，开发机和流水线上都只认同一个 JS 执行环境？"
+
+[[questions]]
+id = "ho-vector-1"
+gold = "vector"
+question = "现阶段找回过往记录，会不会用 embedding 做语义相似度匹配？"
+
+[[questions]]
+id = "ho-vector-2"
+gold = "vector"
+question = "语义相似度那套找回方案为何要推迟到下个里程碑，是担心效果没把握吗？"
+
+[[questions]]
+id = "ho-protocol-1"
+gold = "protocol"
+question = "机器之间互相传话，为什么不直接把现成的智能体互通框架整个搬进来用？"
+
+[[questions]]
+id = "ho-protocol-2"
+gold = "protocol"
+question = "跨机器调用链的追踪编号，按哪家的业界规范来填？"
+
+[[questions]]
+id = "ho-sandbox-1"
+gold = "sandbox"
+question = "代码助手执行时那层隔离环境，底层选的是哪套用户态内核方案？"
+
+[[questions]]
+id = "ho-sandbox-2"
+gold = "sandbox"
+question = "到底是隔离环境套着写代码的助手，还是反过来由助手去开隔离环境？"
+
+[[questions]]
+id = "ho-capability-1"
+gold = "capability"
+question = "谁来给调用权限凭证盖章？是各台机器自己用私钥签，还是一个中心统一发？"
+
+[[questions]]
+id = "ho-capability-2"
+gold = "capability"
+question = "为什么光靠各方都知道的同一串口令来放行权限不够稳妥？"
+
+[[questions]]
+id = "ho-backup-1"
+gold = "backup"
+question = "每台机器上的项目目录存档，是它们各自压缩后送到远端去的吗？"
+
+[[questions]]
+id = "ho-backup-2"
+gold = "backup"
+question = "为何不直接沿用隔离容器自带的存盘导出能力来留底？"
+
+[[questions]]
+id = "ho-license-1"
+gold = "license"
+question = "我们新写的源文件，对外放出时带的是哪种强传染性开源条款？"
+
+[[questions]]
+id = "ho-license-2"
+gold = "license"
+question = "从上游继承来的文件和我们后加的文件，授权条款怎么区分，拿什么当依据？"
+
+[[questions]]
+id = "ho-shards-1"
+gold = "shards"
+question = "全部单元用例是一口气跑完，还是按文件夹拆成几批各开各的？"
+
+[[questions]]
+id = "ho-shards-2"
+gold = "shards"
+question = "拆开跑用例图什么？是怕前面的模拟对象残留下来污染后面的吗？"
+
+[[questions]]
+id = "ho-utc-1"
+gold = "utc"
+question = "写到磁盘上的那些记录，钟点该按北京时区还是格林尼治零时区？"
+
+[[questions]]
+id = "ho-utc-2"
+gold = "utc"
+question = "直接按字符串比大小就能排出先后，这是靠哪条关于钟点格式的约定？"
+
+[[questions]]
+id = "ho-copy-1"
+gold = "copy"
+question = "管理后台上的提示语，能不能写得俏皮一点、加点卖萌的口吻？"
+
+[[questions]]
+id = "ho-copy-2"
+gold = "copy"
+question = "想让界面显得活泼些，可以往哪里下功夫，哪里不可以？"
+
+[[questions]]
+id = "ho-wake-1"
+gold = "wake"
+question = "节点从休眠状态被拉起来，高分位耗时最多允许多久？"
+
+[[questions]]
+id = "ho-wake-2"
+gold = "wake"
+question = "下个里程碑里，休眠恢复的尾部耗时要压到多少？拿哪份历史测量当参照？"
+
+[[questions]]
+id = "ho-hops-1"
+gold = "hops"
+question = "请求在多台机器间来回转发，靠什么防止它无休止地绕圈？"
+
+[[questions]]
+id = "ho-hops-2"
+gold = "hops"
+question = "转发次数封顶那个常量，是不是主要的防转圈手段？"
+
+[[questions]]
+id = "ho-upstream-1"
+gold = "upstream"
+question = "把原始开源项目的新改动拉进来时，是直接做合并，还是逐个补丁重新套上去？"
+
+[[questions]]
+id = "ho-upstream-2"
+gold = "upstream"
+question = "跟原项目对齐多久做一回？做完以后怎么在历史里标出哪些是我们自己的产出？"
+
+[[questions]]
+id = "ho-notify-1"
+gold = "notify"
+question = "后台常驻的代理跑完例行活儿，会主动推消息给我吗？"
+
+[[questions]]
+id = "ho-notify-2"
+gold = "notify"
+question = "驻守代理什么情况下才会来提醒我？按点触发的活又是谁在排？"
+
+[[questions]]
+id = "ho-secrets-1"
+gold = "secrets"
+question = "访问第三方服务的口令和令牌，应该放在哪里让程序拿到？"
+
+[[questions]]
+id = "ho-secrets-2"
+gold = "secrets"
+question = "本机没配好接口口令时，跑用例会不会因为连不上外部服务而挂掉？"
+
+[[questions]]
+id = "ho-compact-1"
+gold = "compact"
+question = "常驻代理每一轮跑下来，会不会把上下文撑爆，逼得系统去精简历史对话？"
+
+[[questions]]
+id = "ho-compact-2"
+gold = "compact"
+question = "如果塞进去的记忆条目、排队的事项和各种函数说明加起来太长，应当先砍哪一块？"
+
+[[questions]]
+id = "ho-docs-lang-1"
+gold = "docs-lang"
+question = "写方案类的技术材料，该用汉语还是英语？"
+
+[[questions]]
+id = "ho-docs-lang-2"
+gold = "docs-lang"
+question = "源文件里的批注和每次入库附的描述各用哪种语言？那些 feat、fix 开头的标记要不要译成汉语？"
+
+[[questions]]
+id = "ho-paths-1"
+gold = "paths"
+question = "代码里要找设置存放的文件夹，能直接把用户主文件夹和名字手工拼接吗？"
+
+[[questions]]
+id = "ho-paths-2"
+gold = "paths"
+question = "要是某处代码自己算存储位置、绕开那个统一的工具模块，不同账户的数据会串吗？"
+
+[[questions]]
+id = "ho-provision-1"
+gold = "provision"
+question = "用远程登录给新服务器部署软件时，业务流量也经过这条通道吗？"
+
+[[questions]]
+id = "ho-provision-2"
+gold = "provision"
+question = "通过远程登录能在新机器上执行哪些操作，有没有固定范围？凭证是不是跟别的共用？"
+
+[[questions]]
+id = "ho-release-1"
+gold = "release"
+question = "我们这个项目会不会往公共软件源上推送自己的安装包、打版本标记？"
+
+[[questions]]
+id = "ho-release-2"
+gold = "release"
+question = "对外出正式版本这件事，为什么轮不到我们这个衍生项目来做？"

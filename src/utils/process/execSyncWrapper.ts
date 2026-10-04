@@ -1,0 +1,43 @@
+import {
+  type ExecSyncOptions,
+  type ExecSyncOptionsWithBufferEncoding,
+  type ExecSyncOptionsWithStringEncoding,
+  execSync as nodeExecSync,
+} from 'child_process'
+import { slowLogging } from '../telemetry/slowOperations.js'
+
+/**
+ * @deprecated Use async alternatives when possible. Sync exec calls block the event loop.
+ *
+ * Wrapped execSync with slow operation logging.
+ * Use this instead of child_process execSync directly to detect performance issues.
+ *
+ * @example
+ * import { execSync_DEPRECATED } from './execSyncWrapper.js'
+ * const result = execSync_DEPRECATED('git status', { encoding: 'utf8' })
+ */
+export function execSync_DEPRECATED(command: string): Buffer
+export function execSync_DEPRECATED(
+  command: string,
+  options: ExecSyncOptionsWithStringEncoding,
+): string
+export function execSync_DEPRECATED(
+  command: string,
+  options: ExecSyncOptionsWithBufferEncoding,
+): Buffer
+export function execSync_DEPRECATED(
+  command: string,
+  options?: ExecSyncOptions,
+): Buffer | string
+export function execSync_DEPRECATED(
+  command: string,
+  options?: ExecSyncOptions,
+): Buffer | string {
+  using _ = slowLogging`execSync: ${command.slice(0, 100)}`
+  // `windowsHide` defaults to FALSE in child_process (unlike execa, which
+  // defaults it true). execSync always goes through `cmd.exe /d /s /c`, so on
+  // Windows every unhidden call flashes a console window over the TUI. Every
+  // hand-rolled spawn site in this repo already passes `windowsHide: true`;
+  // default it here so callers cannot forget. Explicit options still win.
+  return nodeExecSync(command, { windowsHide: true, ...options })
+}

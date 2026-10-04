@@ -1,0 +1,61 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "ignoreDependencies": [
+    "@ant/*",
+    "react-compiler-runtime",
+    "undici",
+    "@modelcontextprotocol/server-filesystem",
+    "@modelcontextprotocol/server-memory",
+    "@napi-rs/keyring",
+    "auto-bind",
+    "bidi-js",
+    "cli-boxes",
+    "emoji-regex",
+    "get-east-asian-width",
+    "indent-string",
+    "react-reconciler",
+    "supports-hyperlinks",
+    "type-fest",
+    "wrap-ansi"
+  ],
+  "ignoreBinaries": [
+    "mintlify",
+    "gh",
+    "security",
+    "ps",
+    "tasklist",
+    "findstr",
+    "ip"
+  ],
+  "ignoreUnresolved": ["\\.md$"],
+  "workspaces": {
+    ".": {
+      "entry": [
+        "src/entrypoints/cli.tsx",
+        "scripts/**/*.{ts,mjs,cjs}",
+        "src/**/*.runner.ts",
+        "demo/lib/ac6a-sandbox.ts",
+        "demo/lib/p31-copy-resident-timings.ts",
+        "demo/lib/p61-scenario.ts",
+        "demo/lib/p61-seed.ts",
+        "demo/lib/p61-worker.ts",
+        "demo/lib/p73-sample.ts",
+        "demo/lib/p73-throughput.ts",
+        "demo/lib/p81-probe.ts",
+        "demo/lib/p81-registry.ts"
+      ],
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignore": ["src/types/**"]
+    },
+    "packages/*": {
+      "project": ["src/**/*.{ts,tsx}"]
+    },
+    "packages/workflow-engine": {
+      "project": ["src/**/*.{ts,tsx}"],
+      "ignoreDependencies": ["bun-types"]
+    },
+    "packages/@ant/*": {
+      "ignore": ["**"]
+    }
+  }
+}

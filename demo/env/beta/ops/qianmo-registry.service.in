@@ -1,0 +1,72 @@
+# Copyright 2026 Qianmo AgentNest Team
+# SPDX-License-Identifier: AGPL-3.0-or-later
+#
+# 阡陌内测 · H 上的注册中心（systemd --user 单元）。
+#
+# **这是模板，不是装好的那一份。**`beta-up.sh --role host` 把 @…@ 占位符换掉之后写进
+# <内测根>/ops/ 与 ~/.config/systemd/user/。直接改装好的那一份没有意义——下一次
+# beta-up.sh 会照本文件重新派生。要改就改这里。
+#
+# ── 为什么需要它 ─────────────────────────────────────────────────────────────
+# 隧道与审计镜像早就有单元，唯独控制台与注册中心一直是裸进程：H 一重启，两者就都没了，
+# 而且不会自动回来（issue #45）。这个单元只解决那一件事。
+#
+# ── 为什么 ExecStart 调的是仓库脚本，而不是直接把进程写在这里 ────────────────
+# 注册中心的命令行是 peers.conf 派生的（每条地址一个 --register），控制台那边更长
+# （每节点一条 --audit、一条 --wake-url，外加两个 token 文件）。把它抄进单元文件等于
+# 让同一个事实存在两处，而分叉的症状是「改了 peers.conf 却不生效」——那正是本包最难
+# 查的一类故障。派生仍然只发生在 beta-up.sh 里，单元只负责在开机时叫它一次。
+#
+# ── 它保证什么、不保证什么 ───────────────────────────────────────────────────
+# Type=oneshot 的单元只保证**开机自动回来**。`Restart=` 对 oneshot 无效，所以进程崩了
+# 不会被拉起，仍然要靠 beta-smoke.sh 或人发现。这是「重启就没了」的修，不是进程守护器。
+# 说清楚是因为「单元 active」在这里只意味着「那一趟起过了」，不意味着进程还活着。
+#
+# ── 单元状态不是存活判据，**两个方向都不是**（issue #64）─────────────────────
+# 上一段说的是 active → 进程未必活。反方向同样成立，而且更常见：
+#   systemctl --user is-active qianmo-console.service   → inactive (rc=3)
+#   curl /v0/health → 200，38621 LISTEN，进程已跑 6539 s        ← 2026-08-24 真机实测
+# 因为 beta-up.sh 每趟都自己起进程，对这两个单元**只 enable 不 start**（理由见
+# beta-up.sh 的 provision_host_units 头注），于是它们从没被 systemd 跑过。对照组是同机
+# 四条 qianmo-tunnel@<节点>.service —— 那几个是 Type=exec，systemd 直接管着 ssh 进程，
+# is-active 说的是真话。差别在这里，不在 user scope。
+#
+# 所以运维与自动化判这两个进程的死活只有一条路：
+#   curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:38620/v0/health   # 注册中心
+#   curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:38621/v0/health   # 控制台
+# 两条都公开、零鉴权、答 200 才算活着（注册中心那条同时回 {"status":"ok","agents":N}）。
+# 别去试 `/health` 或 `/v0/peers` —— 两条都是 404，正确的前缀是 `/v0`、集合叫 `agents`。
+# 一句话版：`demo/env/beta/beta-smoke.sh --role host` 的第①③项问的就是这两条。
+#
+# **没有把单元改成「状态真实」，是算过账的。**要么把 peers.conf 派生出来的整条命令行
+# 抄进单元文件让 systemd 直接管进程（第二处真源，正是上一节拒绝的那件事），要么让
+# beta-up.sh 转手去 systemctl start（Requires= 会把整条 links+registry 腿再跑一遍，
+# 且任何一步绊倒就把一套活着的部署变成 failed）。代价都比收益大，于是改为把这条差距
+# 说出来：Description 里有、beta-smoke.sh 会在①③旁边解释、README 有一节。最坏的中间
+# 态是「看起来有个状态可查，查出来是错的」，一句话就能把它从陷阱变成常识。
+#
+# ── PATH 是这里唯一一个必须显式给的东西 ──────────────────────────────────────
+# systemd --user 的 PATH 极小，而整套脚本硬依赖 bun，它通常装在 ~/.bun/bin。缺了这一行
+# 的症状是开机后单元 failed、日志里一句「bun 跑不起来」——2026-08-24 的舰队部署在非交互
+# SSH 上撞的是同一个形状。下面这一行由 beta-up.sh 按它**自己解析到的那个 bun** 派生。
+
+[Unit]
+Description=Qianmo beta registry on H (oneshot; unit state is NOT a liveness signal, GET /v0/health is)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+Environment=QIANMO_BETA_ROOT=@BETA_ROOT@
+Environment=PATH=@UNIT_PATH_ENV@
+# --only links --only registry：这一趟只铺链路与注册中心。控制台是另一个单元，
+# 它 Requires= 这一个，于是开机顺序自然是 §7.1 那条（链路 → 注册中心 → 控制台）。
+ExecStart=@REPO_DIR@/demo/env/beta/beta-up.sh --role host --only links --only registry
+ExecStop=@REPO_DIR@/demo/env/beta/beta-down.sh registry
+# 起机要等隧道逐条拨通（READY_TIMEOUT_S 默认 90 s，四条串起来能到几分钟），
+# 默认的 90 s 会在链路慢的那一天把单元判成超时失败。
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target
